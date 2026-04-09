@@ -75,6 +75,10 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/feeds/source/{source_id}/atom", s.handleFeedAtomBySource)
 	mux.HandleFunc("GET /api/feeds/source/{source_id}/json", s.handleFeedJSONBySource)
 
+	// Observatório M3 — entes
+	mux.HandleFunc("GET /api/entes", s.handleListEntes)
+	mux.HandleFunc("GET /api/entes/{id}", s.handleGetEnte)
+
 	mux.Handle("GET /api/metrics", promhttp.Handler())
 
 	// Legacy unprefixed endpoints that external scripts might still depend on.

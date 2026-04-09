@@ -26,17 +26,39 @@ import (
 	"github.com/gmowses/fepublica/internal/store"
 )
 
-// IBGEMunicipio is the minimal shape we consume from the IBGE API.
+// ibgeMunicipio captures the minimum fields we need from the IBGE API.
+// IBGE has historically exposed the UF under microrregiao.mesorregiao.UF,
+// but newer municipalities have that path NULL and the UF lives under
+// regiao-imediata.regiao-intermediaria.UF instead. We parse both and use
+// whichever is populated.
 type ibgeMunicipio struct {
-	ID         int    `json:"id"`
-	Nome       string `json:"nome"`
-	Microrregiao struct {
+	ID           int    `json:"id"`
+	Nome         string `json:"nome"`
+	Microrregiao *struct {
 		Mesorregiao struct {
 			UF struct {
 				Sigla string `json:"sigla"`
 			} `json:"UF"`
 		} `json:"mesorregiao"`
 	} `json:"microrregiao"`
+	RegiaoImediata *struct {
+		RegiaoIntermediaria struct {
+			UF struct {
+				Sigla string `json:"sigla"`
+			} `json:"UF"`
+		} `json:"regiao-intermediaria"`
+	} `json:"regiao-imediata"`
+}
+
+// uf returns the UF sigla from whichever hierarchy path IBGE populated.
+func (m *ibgeMunicipio) uf() string {
+	if m.Microrregiao != nil {
+		return m.Microrregiao.Mesorregiao.UF.Sigla
+	}
+	if m.RegiaoImediata != nil {
+		return m.RegiaoImediata.RegiaoIntermediaria.UF.Sigla
+	}
+	return ""
 }
 
 // ibgeEndpoint returns the list of all Brazilian municipalities.
@@ -207,9 +229,15 @@ func (s *Seeder) seedMunicipalities(ctx context.Context) error {
 	}
 	s.logger.Info().Int("count", len(list)).Msg("entes: upserting municipalities")
 
+	skipped := 0
 	for _, m := range list {
 		id := fmt.Sprintf("mun:%d", m.ID)
-		uf := m.Microrregiao.Mesorregiao.UF.Sigla
+		uf := m.uf()
+		if uf == "" {
+			s.logger.Warn().Int("ibge_code", m.ID).Str("nome", m.Nome).Msg("entes: municipality has no UF in IBGE response, skipping")
+			skipped++
+			continue
+		}
 		tier := 4
 		if _, isCapital := capitals[m.ID]; isCapital {
 			tier = 2
@@ -227,6 +255,9 @@ func (s *Seeder) seedMunicipalities(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+	}
+	if skipped > 0 {
+		s.logger.Warn().Int("skipped", skipped).Msg("entes: some municipalities skipped due to missing UF")
 	}
 	return nil
 }

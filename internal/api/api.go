@@ -258,14 +258,14 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"source_id": snapA.SourceID,
 		"snapshot_a": map[string]any{
-			"id":            idA,
-			"collected_at":  snapA.CollectedAt.UTC().Format(time.RFC3339),
-			"record_count":  snapA.RecordCount,
+			"id":           idA,
+			"collected_at": snapA.CollectedAt.UTC().Format(time.RFC3339),
+			"record_count": snapA.RecordCount,
 		},
 		"snapshot_b": map[string]any{
-			"id":            idB,
-			"collected_at":  snapB.CollectedAt.UTC().Format(time.RFC3339),
-			"record_count":  snapB.RecordCount,
+			"id":           idB,
+			"collected_at": snapB.CollectedAt.UTC().Format(time.RFC3339),
+			"record_count": snapB.RecordCount,
 		},
 		"summary": map[string]int{
 			"added":   len(added),
@@ -313,14 +313,14 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := map[string]any{
-		"service":     "Fé Pública",
-		"tagline":     "Tamper-evident archive of Brazilian public transparency data, anchored in Bitcoin via OpenTimestamps",
-		"version":     s.version,
-		"repository":  "https://github.com/gmowses/fepublica",
-		"license":     "AGPL-3.0",
-		"base_url":    s.baseURL,
-		"started_at":  s.started.UTC().Format(time.RFC3339),
-		"uptime":      time.Since(s.started).Round(time.Second).String(),
+		"service":    "Fé Pública",
+		"tagline":    "Tamper-evident archive of Brazilian public transparency data, anchored in Bitcoin via OpenTimestamps",
+		"version":    s.version,
+		"repository": "https://github.com/gmowses/fepublica",
+		"license":    "AGPL-3.0",
+		"base_url":   s.baseURL,
+		"started_at": s.started.UTC().Format(time.RFC3339),
+		"uptime":     time.Since(s.started).Round(time.Second).String(),
 		"endpoints": map[string]string{
 			"health":    "/health",
 			"sources":   "/sources",
@@ -425,14 +425,14 @@ func (s *Server) handleListSnapshotAnchors(w http.ResponseWriter, r *http.Reques
 
 // ProofDTO is the exported JSON format the verify CLI consumes.
 type ProofDTO struct {
-	Version             int               `json:"version"`
-	SourceID            string            `json:"source_id"`
-	SnapshotID          int64             `json:"snapshot_id"`
-	SnapshotCollectedAt time.Time         `json:"snapshot_collected_at"`
-	Event               ProofEvent        `json:"event"`
-	Merkle              ProofMerkle       `json:"merkle"`
-	Anchors             []ProofAnchor     `json:"anchors"`
-	GeneratedAt         time.Time         `json:"generated_at"`
+	Version             int           `json:"version"`
+	SourceID            string        `json:"source_id"`
+	SnapshotID          int64         `json:"snapshot_id"`
+	SnapshotCollectedAt time.Time     `json:"snapshot_collected_at"`
+	Event               ProofEvent    `json:"event"`
+	Merkle              ProofMerkle   `json:"merkle"`
+	Anchors             []ProofAnchor `json:"anchors"`
+	GeneratedAt         time.Time     `json:"generated_at"`
 }
 
 type ProofEvent struct {
@@ -608,14 +608,14 @@ func snapshotsDTO(snaps []store.Snapshot) []snapshotView {
 }
 
 type anchorView struct {
-	ID            int64  `json:"id"`
-	SnapshotID    int64  `json:"snapshot_id"`
-	CalendarURL   string `json:"calendar_url"`
-	SubmittedAt   string `json:"submitted_at"`
-	Upgraded      bool   `json:"upgraded"`
-	UpgradedAt    string `json:"upgraded_at,omitempty"`
-	BlockHeight   *int   `json:"block_height,omitempty"`
-	ReceiptBytes  int    `json:"receipt_bytes"`
+	ID           int64  `json:"id"`
+	SnapshotID   int64  `json:"snapshot_id"`
+	CalendarURL  string `json:"calendar_url"`
+	SubmittedAt  string `json:"submitted_at"`
+	Upgraded     bool   `json:"upgraded"`
+	UpgradedAt   string `json:"upgraded_at,omitempty"`
+	BlockHeight  *int   `json:"block_height,omitempty"`
+	ReceiptBytes int    `json:"receipt_bytes"`
 }
 
 func anchorsDTO(anchors []store.Anchor) []anchorView {

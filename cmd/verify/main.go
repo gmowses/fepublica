@@ -40,14 +40,14 @@ var version = "dev"
 
 // proofDTO must stay in sync with internal/api ProofDTO.
 type proofDTO struct {
-	Version             int             `json:"version"`
-	SourceID            string          `json:"source_id"`
-	SnapshotID          int64           `json:"snapshot_id"`
-	SnapshotCollectedAt string          `json:"snapshot_collected_at"`
-	Event               proofEvent      `json:"event"`
-	Merkle              proofMerkle     `json:"merkle"`
-	Anchors             []proofAnchor   `json:"anchors"`
-	GeneratedAt         string          `json:"generated_at"`
+	Version             int           `json:"version"`
+	SourceID            string        `json:"source_id"`
+	SnapshotID          int64         `json:"snapshot_id"`
+	SnapshotCollectedAt string        `json:"snapshot_collected_at"`
+	Event               proofEvent    `json:"event"`
+	Merkle              proofMerkle   `json:"merkle"`
+	Anchors             []proofAnchor `json:"anchors"`
+	GeneratedAt         string        `json:"generated_at"`
 }
 
 type proofEvent struct {
@@ -117,7 +117,7 @@ func verify(path string) error {
 	}
 
 	// 1. Re-hash canonical JSON.
-	canon, err := canonjson.Marshal(json.RawMessage(p.Event.CanonicalJSON))
+	canon, err := canonjson.Marshal(p.Event.CanonicalJSON)
 	if err != nil {
 		return fmt.Errorf("canonicalize event: %w", err)
 	}

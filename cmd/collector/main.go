@@ -164,5 +164,5 @@ type cronLogger struct {
 	zl any // zerolog.Logger kept as any to avoid the package depending on cron's logger surface
 }
 
-func (c cronLogger) Info(msg string, keysAndValues ...any)  {}
+func (c cronLogger) Info(msg string, keysAndValues ...any)             {}
 func (c cronLogger) Error(err error, msg string, keysAndValues ...any) {}

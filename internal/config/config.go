@@ -12,13 +12,13 @@ import (
 
 // Config holds all runtime configuration for Fé Pública components.
 type Config struct {
-	Postgres     PostgresConfig
+	Postgres      PostgresConfig
 	Transparencia TransparenciaConfig
-	OTS          OTSConfig
-	Collector    CollectorConfig
-	Anchor       AnchorConfig
-	API          APIConfig
-	Log          LogConfig
+	OTS           OTSConfig
+	Collector     CollectorConfig
+	Anchor        AnchorConfig
+	API           APIConfig
+	Log           LogConfig
 }
 
 type PostgresConfig struct {

@@ -23,10 +23,10 @@ type Fetcher func(ctx context.Context, client *transparencia.Client) (*transpare
 
 // Collector runs a named source against the API and persists the result.
 type Collector struct {
-	store       *store.Store
-	httpClient  *transparencia.Client
-	logger      zerolog.Logger
-	version     string
+	store      *store.Store
+	httpClient *transparencia.Client
+	logger     zerolog.Logger
+	version    string
 }
 
 // New creates a Collector.

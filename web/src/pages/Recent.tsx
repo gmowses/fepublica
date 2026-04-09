@@ -1,50 +1,86 @@
-import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { useQuery, useQueries } from "@tanstack/react-query";
-import { api, formatDate, formatNumber } from "../lib/api";
-import { ArrowLeftRight, Info, Plus, Minus, PenLine } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import {
+  ArrowLeftRight,
+  Info,
+  Plus,
+  Minus,
+  PenLine,
+  Filter,
+} from "lucide-react";
+import { formatDate, formatNumber } from "../lib/api";
 
-// The Recent page runs diffs between consecutive snapshots of each source and
-// aggregates the results into a cross-source feed. This is a client-side
-// approximation of the future automatic drift detector.
+interface DiffRun {
+  id: number;
+  source_id: string;
+  snapshot_a_id: number;
+  snapshot_b_id: number;
+  added_count: number;
+  removed_count: number;
+  modified_count: number;
+  ran_at: string;
+  duration_ms: number;
+}
+
+interface ChangeEvent {
+  id: number;
+  diff_run_id: number;
+  source_id: string;
+  external_id: string;
+  change_type: "added" | "removed" | "modified";
+  detected_at: string;
+  severity: "info" | "warn" | "alert";
+}
+
+// Recent now reads pre-computed drift_runs and change_events from the
+// Observatório M1 backend, instead of computing client-side diffs.
 export function Recent() {
-  const snapsQ = useQuery({
-    queryKey: ["snapshots", { limit: 200 }],
-    queryFn: () => api.snapshots({ limit: 200 }),
+  const [searchParams, setSearchParams] = useSearchParams();
+  const source = searchParams.get("source") || "";
+  const severity = searchParams.get("severity") || "";
+
+  const runsQ = useQuery({
+    queryKey: ["diff-runs", source],
+    queryFn: () => {
+      const p = new URLSearchParams({ limit: "20" });
+      if (source) p.set("source", source);
+      return fetch(`/api/diff-runs?${p}`).then((r) => r.json()) as Promise<{
+        diff_runs: DiffRun[];
+      }>;
+    },
   });
 
-  const pairs = useMemo(() => {
-    const bySource = new Map<string, number[]>();
-    for (const s of snapsQ.data?.snapshots ?? []) {
-      if (!bySource.has(s.source_id)) bySource.set(s.source_id, []);
-      bySource.get(s.source_id)!.push(s.id);
-    }
-    const out: Array<{ source: string; a: number; b: number }> = [];
-    for (const [source, ids] of bySource) {
-      ids.sort((x, y) => x - y);
-      for (let i = 1; i < ids.length; i++) {
-        out.push({ source, a: ids[i - 1], b: ids[i] });
-      }
-    }
-    return out.slice(-10).reverse();
-  }, [snapsQ.data]);
-
-  const diffQueries = useQueries({
-    queries: pairs.map((p) => ({
-      queryKey: ["diff", p.a, p.b],
-      queryFn: () => api.diff(p.a, p.b),
-      staleTime: 60_000,
-    })),
+  const eventsQ = useQuery({
+    queryKey: ["change-events", source, severity],
+    queryFn: () => {
+      const p = new URLSearchParams({ limit: "50" });
+      if (source) p.set("source", source);
+      if (severity) p.set("severity", severity);
+      return fetch(`/api/change-events?${p}`).then((r) => r.json()) as Promise<{
+        total: number;
+        limit: number;
+        offset: number;
+        change_events: ChangeEvent[];
+      }>;
+    },
   });
 
-  const totalChanges = diffQueries.reduce((acc, q) => {
-    if (q.data) {
-      return (
-        acc + q.data.summary.added + q.data.summary.removed + q.data.summary.changed
-      );
-    }
-    return acc;
-  }, 0);
+  const runs = runsQ.data?.diff_runs ?? [];
+  const events = eventsQ.data?.change_events ?? [];
+  const totalEvents = eventsQ.data?.total ?? 0;
+
+  const totalAdded = runs.reduce((a, r) => a + r.added_count, 0);
+  const totalRemoved = runs.reduce((a, r) => a + r.removed_count, 0);
+  const totalModified = runs.reduce((a, r) => a + r.modified_count, 0);
+  const totalChanges = totalAdded + totalRemoved + totalModified;
+
+  const setFilter = (key: string, value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    setSearchParams(next);
+  };
 
   return (
     <div className="container-app py-6 md:py-10">
@@ -58,88 +94,163 @@ export function Recent() {
         Mudanças recentes
       </h1>
       <p className="text-ink-dim mt-2 max-w-3xl">
-        Diffs entre snapshots consecutivos de cada fonte monitorada. Cada
-        entrada representa o delta entre uma coleta e a imediatamente anterior.
-        Este é um feed cronológico de "o que mudou no arquivo público".
+        Feed cronológico de alterações detectadas entre snapshots consecutivos
+        de cada fonte monitorada. Os diffs são persistidos pelo{" "}
+        <code className="text-accent">driftd</code> worker do Observatório e
+        classificados por severidade antes de serem publicados.
       </p>
 
-      {pairs.length === 0 && (
-        <div className="card mt-6 text-sm text-ink-dim flex items-center gap-2">
+      {/* Filter bar */}
+      <div className="card mt-6 flex flex-wrap items-center gap-3">
+        <Filter className="size-4 text-ink-dim" />
+        <label className="text-xs text-ink-dim">fonte</label>
+        <select
+          className="bg-bg border border-ink/10 rounded-md px-2 py-1 text-sm font-mono"
+          value={source}
+          onChange={(e) => setFilter("source", e.target.value)}
+        >
+          <option value="">todas</option>
+          <option value="ceis">ceis</option>
+          <option value="cnep">cnep</option>
+          <option value="pncp-contratos">pncp-contratos</option>
+        </select>
+        <label className="text-xs text-ink-dim">severidade</label>
+        <select
+          className="bg-bg border border-ink/10 rounded-md px-2 py-1 text-sm font-mono"
+          value={severity}
+          onChange={(e) => setFilter("severity", e.target.value)}
+        >
+          <option value="">todas</option>
+          <option value="info">info</option>
+          <option value="warn">warn</option>
+          <option value="alert">alert</option>
+        </select>
+      </div>
+
+      {/* Summary */}
+      <div className="card mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 items-center">
+        <div>
+          <div className="stat-k">diff runs</div>
+          <div className="stat-v">{formatNumber(runs.length)}</div>
+        </div>
+        <div>
+          <div className="stat-k">eventos filtrados</div>
+          <div className="stat-v">{formatNumber(totalEvents)}</div>
+        </div>
+        <div>
+          <div className="stat-k">mudanças totais</div>
+          <div className="stat-v text-accent">{formatNumber(totalChanges)}</div>
+        </div>
+        <div className="text-xs text-ink-dim">
+          <div className="flex items-center gap-2">
+            <Plus className="size-3 text-ok" /> {formatNumber(totalAdded)} adds
+          </div>
+          <div className="flex items-center gap-2">
+            <Minus className="size-3 text-danger" /> {formatNumber(totalRemoved)}{" "}
+            removes
+          </div>
+          <div className="flex items-center gap-2">
+            <PenLine className="size-3 text-accent" /> {formatNumber(totalModified)}{" "}
+            mods
+          </div>
+        </div>
+      </div>
+
+      {/* Diff runs timeline */}
+      <h2 className="text-lg font-semibold mt-8 mb-3">Últimas execuções</h2>
+      {runsQ.isLoading && (
+        <div className="text-ink-dim text-sm">carregando…</div>
+      )}
+      {runs.length === 0 && !runsQ.isLoading && (
+        <div className="card text-sm text-ink-dim flex items-center gap-2">
           <Info className="size-4" />
-          Ainda não há snapshots suficientes por fonte para gerar um diff.
-          Precisamos de pelo menos 2 coletas consecutivas.
+          Ainda não há execuções de diff registradas. O driftd roda
+          automaticamente no background a cada 2 minutos.
         </div>
       )}
-
-      {pairs.length > 0 && (
-        <div className="card mt-6 mb-6 text-sm">
-          <span className="text-ink-dim">últimos {pairs.length} diffs · </span>
-          <span className="font-semibold text-accent">
-            {formatNumber(totalChanges)} mudanças totais
-          </span>
-        </div>
-      )}
-
       <div className="space-y-3">
-        {pairs.map((p, i) => {
-          const q = diffQueries[i];
-          return (
-            <div key={`${p.a}-${p.b}`} className="card">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-3">
-                  <ArrowLeftRight className="size-4 text-accent" />
-                  <div>
-                    <div className="font-semibold">
-                      {p.source}{" "}
-                      <span className="text-ink-dim font-normal font-mono text-xs">
-                        #{p.a} → #{p.b}
-                      </span>
-                    </div>
-                    {q.data && (
-                      <div className="text-xs text-ink-dim mt-0.5">
-                        {formatDate(q.data.snapshot_a.collected_at)} →{" "}
-                        {formatDate(q.data.snapshot_b.collected_at)}
-                      </div>
-                    )}
+        {runs.map((r) => (
+          <div key={r.id} className="card">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-3">
+                <ArrowLeftRight className="size-4 text-accent" />
+                <div>
+                  <div className="font-semibold">
+                    {r.source_id}{" "}
+                    <span className="text-ink-dim font-normal font-mono text-xs">
+                      #{r.snapshot_a_id} → #{r.snapshot_b_id}
+                    </span>
+                  </div>
+                  <div className="text-xs text-ink-dim mt-0.5">
+                    {formatDate(r.ran_at)} · {r.duration_ms}ms
                   </div>
                 </div>
-                <Link
-                  to={`/diff/${p.a}/${p.b}`}
-                  className="text-xs text-accent hover:underline"
-                >
-                  ver diff completo →
-                </Link>
               </div>
-
-              {q.isLoading && (
-                <div className="text-xs text-ink-dim mt-3">calculando…</div>
-              )}
-              {q.data && (
-                <div className="grid grid-cols-3 gap-2 mt-3">
-                  <DiffStat
-                    icon={Plus}
-                    label="adicionados"
-                    count={q.data.summary.added}
-                    color="text-ok"
-                  />
-                  <DiffStat
-                    icon={Minus}
-                    label="removidos"
-                    count={q.data.summary.removed}
-                    color="text-danger"
-                  />
-                  <DiffStat
-                    icon={PenLine}
-                    label="alterados"
-                    count={q.data.summary.changed}
-                    color="text-accent"
-                  />
-                </div>
-              )}
+              <Link
+                to={`/diff/${r.snapshot_a_id}/${r.snapshot_b_id}`}
+                className="text-xs text-accent hover:underline"
+              >
+                ver diff →
+              </Link>
             </div>
-          );
-        })}
+            <div className="grid grid-cols-3 gap-2 mt-3">
+              <DiffStat icon={Plus} label="adicionados" count={r.added_count} color="text-ok" />
+              <DiffStat icon={Minus} label="removidos" count={r.removed_count} color="text-danger" />
+              <DiffStat icon={PenLine} label="alterados" count={r.modified_count} color="text-accent" />
+            </div>
+          </div>
+        ))}
       </div>
+
+      {/* Change events stream */}
+      {events.length > 0 && (
+        <>
+          <h2 className="text-lg font-semibold mt-10 mb-3">
+            Stream de eventos{severity ? ` (${severity})` : ""}
+          </h2>
+          <div className="card overflow-x-auto p-0">
+            <table className="w-full text-sm">
+              <thead className="text-xs uppercase tracking-wider text-ink-dim">
+                <tr>
+                  <th className="text-left px-4 py-2">fonte</th>
+                  <th className="text-left px-4 py-2">tipo</th>
+                  <th className="text-left px-4 py-2">external_id</th>
+                  <th className="text-left px-4 py-2">sev</th>
+                  <th className="text-left px-4 py-2">detectado em</th>
+                  <th className="text-left px-4 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {events.map((e) => (
+                  <tr key={e.id} className="border-t border-ink/10">
+                    <td className="px-4 py-2 font-mono">{e.source_id}</td>
+                    <td className="px-4 py-2">
+                      <ChangeTypeChip type={e.change_type} />
+                    </td>
+                    <td className="px-4 py-2 font-mono text-xs">
+                      {e.external_id}
+                    </td>
+                    <td className="px-4 py-2">
+                      <SeverityChip sev={e.severity} />
+                    </td>
+                    <td className="px-4 py-2 text-ink-dim text-xs">
+                      {formatDate(e.detected_at)}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <Link
+                        to={`/snapshots/${e.diff_run_id}/events/${encodeURIComponent(e.external_id)}`}
+                        className="text-accent hover:underline text-xs"
+                      >
+                        inspecionar →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -166,4 +277,19 @@ function DiffStat({
       </div>
     </div>
   );
+}
+
+function ChangeTypeChip({ type }: { type: string }) {
+  const c =
+    type === "added"
+      ? "chip-ok"
+      : type === "removed"
+      ? "chip-danger"
+      : "chip-warn";
+  return <span className={`chip ${c}`}>{type}</span>;
+}
+
+function SeverityChip({ sev }: { sev: string }) {
+  const c = sev === "alert" ? "chip-danger" : sev === "warn" ? "chip-warn" : "";
+  return <span className={`chip ${c}`}>{sev}</span>;
 }

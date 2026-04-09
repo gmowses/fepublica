@@ -17,16 +17,44 @@ type InsertEventParams struct {
 	CanonicalJSON []byte
 }
 
-// InsertEventsBatch inserts many events in a single transaction.
-// Returns the number of rows inserted.
+// insertBatchChunkSize caps how many events are queued in a single pgx.Batch.
+// Keeping it bounded lets pgx stream statements to Postgres instead of
+// buffering megabytes of JSON in memory, which matters for large collectors
+// (CEIS with 22k+ records produces ~75 MB of raw JSON).
+const insertBatchChunkSize = 500
+
+// InsertEventsBatch inserts many events, chunked into transactions of
+// insertBatchChunkSize rows each. Returns the total number of rows inserted.
+// On error, previously committed chunks remain persisted — the caller can
+// treat partial progress as recoverable (the snapshot row will still exist
+// with its final count, and idempotent re-runs can be detected by the
+// snapshots.unique(source_id, collected_at) constraint).
 func (s *Store) InsertEventsBatch(ctx context.Context, events []InsertEventParams) (int, error) {
 	if len(events) == 0 {
 		return 0, nil
 	}
 
+	total := 0
+	for start := 0; start < len(events); start += insertBatchChunkSize {
+		end := start + insertBatchChunkSize
+		if end > len(events) {
+			end = len(events)
+		}
+		chunk := events[start:end]
+
+		inserted, err := s.insertEventsChunk(ctx, chunk)
+		total += inserted
+		if err != nil {
+			return total, fmt.Errorf("store: chunk [%d:%d]: %w", start, end, err)
+		}
+	}
+	return total, nil
+}
+
+func (s *Store) insertEventsChunk(ctx context.Context, events []InsertEventParams) (int, error) {
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return 0, fmt.Errorf("store: begin tx: %w", err)
+		return 0, fmt.Errorf("begin tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -42,15 +70,15 @@ func (s *Store) InsertEventsBatch(ctx context.Context, events []InsertEventParam
 	for i := 0; i < len(events); i++ {
 		if _, err := br.Exec(); err != nil {
 			_ = br.Close()
-			return inserted, fmt.Errorf("store: insert event %d: %w", i, err)
+			return inserted, fmt.Errorf("insert event %d: %w", i, err)
 		}
 		inserted++
 	}
 	if err := br.Close(); err != nil {
-		return inserted, fmt.Errorf("store: close batch: %w", err)
+		return inserted, fmt.Errorf("close batch: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return inserted, fmt.Errorf("store: commit events: %w", err)
+		return inserted, fmt.Errorf("commit: %w", err)
 	}
 	return inserted, nil
 }

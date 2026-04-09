@@ -97,10 +97,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 256M
+          cpus: "1.0"
+          memory: 1G
         reservations:
-          memory: 64M
+          memory: 128M
 
   anchor:
     build:

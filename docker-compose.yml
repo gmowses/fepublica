@@ -171,6 +171,32 @@ services:
         reservations:
           memory: 64M
 
+  archive:
+    build:
+      context: .
+      args:
+        TARGET: archive
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+      S3_BUCKET: ${S3_BUCKET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - fepublica_internal
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          memory: 64M
+
   migrate:
     build:
       context: .

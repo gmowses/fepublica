@@ -1,0 +1,157 @@
+# Curated list of Brazilian federal entes.
+# Updated manually via pull request when the governmental structure changes.
+# Municipalities come from IBGE API; UFs are hardcoded in the loader.
+
+entes:
+  - id: fed:uniao
+    nome: República Federativa do Brasil — União
+    nome_curto: União
+    esfera: federal
+    tipo: uniao
+    tier: 1
+    domain_hint: https://www.gov.br
+
+  # Federal powers
+  - id: fed:executivo
+    nome: Poder Executivo Federal
+    nome_curto: Executivo Federal
+    esfera: federal
+    tipo: poder
+    poder: executivo
+    parent_id: fed:uniao
+    tier: 1
+    domain_hint: https://www.gov.br/planalto
+
+  - id: fed:legislativo
+    nome: Poder Legislativo Federal
+    nome_curto: Congresso Nacional
+    esfera: federal
+    tipo: poder
+    poder: legislativo
+    parent_id: fed:uniao
+    tier: 1
+    domain_hint: https://www.congresso.leg.br
+
+  - id: fed:judiciario
+    nome: Poder Judiciário Federal
+    nome_curto: Judiciário Federal
+    esfera: federal
+    tipo: poder
+    poder: judiciario
+    parent_id: fed:uniao
+    tier: 1
+    domain_hint: https://www.cnj.jus.br
+
+  - id: fed:mpu
+    nome: Ministério Público da União
+    nome_curto: MPU
+    esfera: federal
+    tipo: mp
+    poder: mp
+    parent_id: fed:uniao
+    tier: 1
+    domain_hint: https://www.mpf.mp.br
+
+  # Key control bodies
+  - id: fed:tcu
+    nome: Tribunal de Contas da União
+    nome_curto: TCU
+    esfera: federal
+    tipo: tribunal
+    poder: tc
+    parent_id: fed:legislativo
+    tier: 1
+    cnpj: "00.414.607/0001-18"
+    domain_hint: https://portal.tcu.gov.br
+
+  - id: fed:cgu
+    nome: Controladoria-Geral da União
+    nome_curto: CGU
+    esfera: federal
+    tipo: autarquia
+    poder: executivo
+    parent_id: fed:executivo
+    tier: 1
+    cnpj: "26.664.015/0001-48"
+    domain_hint: https://www.gov.br/cgu
+
+  - id: fed:stf
+    nome: Supremo Tribunal Federal
+    nome_curto: STF
+    esfera: federal
+    tipo: tribunal
+    poder: judiciario
+    parent_id: fed:judiciario
+    tier: 1
+    domain_hint: https://portal.stf.jus.br
+
+  - id: fed:stj
+    nome: Superior Tribunal de Justiça
+    nome_curto: STJ
+    esfera: federal
+    tipo: tribunal
+    poder: judiciario
+    parent_id: fed:judiciario
+    tier: 1
+    domain_hint: https://www.stj.jus.br
+
+  - id: fed:tse
+    nome: Tribunal Superior Eleitoral
+    nome_curto: TSE
+    esfera: federal
+    tipo: tribunal
+    poder: judiciario
+    parent_id: fed:judiciario
+    tier: 1
+    domain_hint: https://www.tse.jus.br
+
+  # Selected federal ministries (seed set; more via PR)
+  - id: fed:exec:fazenda
+    nome: Ministério da Fazenda
+    nome_curto: Fazenda
+    esfera: federal
+    tipo: ministerio
+    poder: executivo
+    parent_id: fed:executivo
+    tier: 1
+    domain_hint: https://www.gov.br/fazenda
+
+  - id: fed:exec:saude
+    nome: Ministério da Saúde
+    nome_curto: Saúde
+    esfera: federal
+    tipo: ministerio
+    poder: executivo
+    parent_id: fed:executivo
+    tier: 1
+    domain_hint: https://www.gov.br/saude
+
+  - id: fed:exec:educacao
+    nome: Ministério da Educação
+    nome_curto: MEC
+    esfera: federal
+    tipo: ministerio
+    poder: executivo
+    parent_id: fed:executivo
+    tier: 1
+    domain_hint: https://www.gov.br/mec
+
+  - id: fed:exec:cultura
+    nome: Ministério da Cultura
+    nome_curto: MinC
+    esfera: federal
+    tipo: ministerio
+    poder: executivo
+    parent_id: fed:executivo
+    tier: 1
+    domain_hint: https://www.gov.br/cultura
+
+  - id: fed:exec:justica
+    nome: Ministério da Justiça e Segurança Pública
+    nome_curto: MJSP
+    esfera: federal
+    tipo: ministerio
+    poder: executivo
+    parent_id: fed:executivo
+    tier: 1
+    domain_hint: https://www.gov.br/mj

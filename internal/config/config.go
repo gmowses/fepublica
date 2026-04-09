@@ -21,6 +21,7 @@ type Config struct {
 	Log           LogConfig
 	Telegram      TelegramConfig
 	Mastodon      MastodonConfig
+	S3            S3Config
 }
 
 // TelegramConfig configures the Telegram bot channel. Empty values disable it.
@@ -33,6 +34,16 @@ type TelegramConfig struct {
 type MastodonConfig struct {
 	InstanceURL string
 	AccessToken string
+}
+
+// S3Config configures the S3-compatible object storage (IDrive E2 by default).
+// Empty Bucket disables any archive worker that depends on it.
+type S3Config struct {
+	Endpoint  string
+	Region    string
+	AccessKey string
+	SecretKey string
+	Bucket    string
 }
 
 type PostgresConfig struct {
@@ -124,6 +135,13 @@ func Load() (*Config, error) {
 		Mastodon: MastodonConfig{
 			InstanceURL: getenv("MASTODON_INSTANCE_URL", ""),
 			AccessToken: getenv("MASTODON_ACCESS_TOKEN", ""),
+		},
+		S3: S3Config{
+			Endpoint:  getenv("S3_ENDPOINT", ""),
+			Region:    getenv("S3_REGION", ""),
+			AccessKey: getenv("S3_ACCESS_KEY", ""),
+			SecretKey: getenv("S3_SECRET_KEY", ""),
+			Bucket:    getenv("S3_BUCKET", ""),
 		},
 	}
 

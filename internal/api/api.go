@@ -51,10 +51,14 @@ func (s *Server) Routes() http.Handler {
 	return logging(s.logger, mux)
 }
 
-// handleIndex serves the root endpoint with service metadata, endpoint map,
-// and a lightweight stats summary. Designed for humans visiting the URL
-// without any UI, and for machines doing service discovery.
+// handleIndex serves the root endpoint. Browsers (Accept: text/html) get the
+// embedded HTML landing page. API clients get a JSON index with service
+// metadata, endpoint map, and a lightweight stats summary.
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	if wantsHTML(r) {
+		serveIndexHTML(w)
+		return
+	}
 	ctx := r.Context()
 
 	sources, _ := s.store.ListSources(ctx)

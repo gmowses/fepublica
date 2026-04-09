@@ -1,0 +1,51 @@
+# Production compose for Fé Pública.
+#
+# Deploy target: an existing VPS that already runs a Traefik reverse cloudface_proxy
+# on a shared Docker network (default: "cloudface_proxy"). This file:
+#
+#   - Adds Traefik labels to the api service so Traefik discovers it.
+#   - Joins the existing cloudface_proxy network as "external".
+#   - Keeps Postgres + collector + anchor on a private internal network.
+#   - Does not expose Postgres to the host.
+#
+# Usage on the VPS:
+#
+#   cd /opt/fepublica
+#   git pull
+#   cp .env.example .env  # fill TRANSPARENCIA_API_KEY and POSTGRES_PASSWORD
+#   docker compose -f docker-compose.yml -f deploy/compose/docker-compose.prod.yml up -d
+#
+# Prerequisites on the host:
+#
+#   - A Traefik instance reachable via the "cloudface_proxy" docker network.
+#   - Traefik configured with an entrypoint "websecure" and a cert resolver
+#     named "letsencrypt" (or adjust labels to match your setup).
+#   - DNS A record: fepublica.gmowses.cloud -> VPS public IP.
+
+services:
+  postgres:
+    # Do not publish postgres to the host in prod.
+    ports: []
+
+  api:
+    # Remove host port binding — Traefik handles ingress.
+    ports: []
+    environment:
+      API_BASE_URL: "https://fepublica.gmowses.cloud"
+    networks:
+      - fepublica_internal
+      - cloudface_proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=cloudface_proxy"
+      - "traefik.http.routers.fepublica.rule=Host(`fepublica.gmowses.cloud`)"
+      - "traefik.http.routers.fepublica.entrypoints=websecure"
+      - "traefik.http.routers.fepublica.tls.certresolver=letsencrypt"
+      - "traefik.http.services.fepublica.loadbalancer.server.port=8080"
+      - "traefik.http.middlewares.fepublica-hsts.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.fepublica-hsts.headers.stsIncludeSubdomains=true"
+      - "traefik.http.routers.fepublica.middlewares=fepublica-hsts"
+
+networks:
+  cloudface_proxy:
+    external: true

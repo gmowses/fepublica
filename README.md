@@ -2,6 +2,11 @@
 
 > Arquivo imutável e criptograficamente verificável de dados públicos brasileiros.
 
+[![ci](https://github.com/gmowses/fepublica/actions/workflows/ci.yml/badge.svg)](https://github.com/gmowses/fepublica/actions/workflows/ci.yml)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![Go Report Card](https://goreportcard.com/badge/github.com/gmowses/fepublica)](https://goreportcard.com/report/github.com/gmowses/fepublica)
+[![Go Reference](https://pkg.go.dev/badge/github.com/gmowses/fepublica.svg)](https://pkg.go.dev/github.com/gmowses/fepublica)
+
 **Status**: `alpha` — em desenvolvimento ativo.
 **Licença**: [AGPL-3.0](./LICENSE)
 

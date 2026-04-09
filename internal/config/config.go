@@ -19,6 +19,20 @@ type Config struct {
 	Anchor        AnchorConfig
 	API           APIConfig
 	Log           LogConfig
+	Telegram      TelegramConfig
+	Mastodon      MastodonConfig
+}
+
+// TelegramConfig configures the Telegram bot channel. Empty values disable it.
+type TelegramConfig struct {
+	BotToken  string
+	ChannelID string
+}
+
+// MastodonConfig configures the Mastodon publisher. Empty values disable it.
+type MastodonConfig struct {
+	InstanceURL string
+	AccessToken string
 }
 
 type PostgresConfig struct {
@@ -102,6 +116,14 @@ func Load() (*Config, error) {
 		Log: LogConfig{
 			Level:  getenv("LOG_LEVEL", "info"),
 			Format: getenv("LOG_FORMAT", "json"),
+		},
+		Telegram: TelegramConfig{
+			BotToken:  getenv("TELEGRAM_BOT_TOKEN", ""),
+			ChannelID: getenv("TELEGRAM_CHANNEL_ID", ""),
+		},
+		Mastodon: MastodonConfig{
+			InstanceURL: getenv("MASTODON_INSTANCE_URL", ""),
+			AccessToken: getenv("MASTODON_ACCESS_TOKEN", ""),
 		},
 	}
 

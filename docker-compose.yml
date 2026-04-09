@@ -146,6 +146,31 @@ services:
         reservations:
           memory: 64M
 
+  notifier:
+    build:
+      context: .
+      args:
+        TARGET: notifier
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHANNEL_ID: ${TELEGRAM_CHANNEL_ID:-}
+      MASTODON_INSTANCE_URL: ${MASTODON_INSTANCE_URL:-}
+      MASTODON_ACCESS_TOKEN: ${MASTODON_ACCESS_TOKEN:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - fepublica_internal
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          memory: 64M
+
   migrate:
     build:
       context: .

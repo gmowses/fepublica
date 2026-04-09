@@ -36,28 +36,38 @@ const (
 	// Path for the contracts endpoint (paginated).
 	Path = "/v1/contratos"
 
-	// PageSize is the maximum page size PNCP accepts for this resource.
-	PageSize = 500
+	// PageSize balances "few enough to avoid timeouts" with "enough to cover
+	// typical volume". PNCP rejects values below 10.
+	PageSize = 50
+
+	// WindowDays is the default rolling window used when no explicit range
+	// is provided by the caller. Narrow enough to fit a single paged fetch
+	// without timing out the slow PNCP backend.
+	WindowDays = 7
 )
 
 // pageResponse is the envelope shape returned by PNCP.
 type pageResponse struct {
-	Data         []json.RawMessage `json:"data"`
-	TotalPaginas int               `json:"totalPaginas"`
-	TotalRegistros int             `json:"totalRegistros"`
-	Numero       int               `json:"numeroDaPagina"`
-	Empty        bool              `json:"empty"`
+	Data             []json.RawMessage `json:"data"`
+	TotalPaginas     int               `json:"totalPaginas"`
+	TotalRegistros   int               `json:"totalRegistros"`
+	NumeroPagina     int               `json:"numeroPagina"`
+	PaginasRestantes int               `json:"paginasRestantes"`
+	Empty            bool              `json:"empty"`
 }
 
+// cap on the number of pages we walk in a single run, to avoid runaway
+// crawls on exceptionally busy days or upstream bugs.
+const maxPages = 200
+
 // recordShape is the minimal subset we need to extract an external id.
-// PNCP uses "numeroControlePNCP" as a stable globally-unique identifier
-// for a contract. If present we use it; otherwise we fall back to the
-// compound (orgaoEntidade.cnpj + sequencial + ano).
+// PNCP uses "numeroControlePncpCompra" as the stable identifier for a
+// contract in the consulta v1 API (format: "<cnpj>-<seq>-<num>/<ano>").
 type recordShape struct {
-	NumeroControlePNCP string `json:"numeroControlePNCP"`
-	SequencialContrato *int   `json:"sequencialContrato"`
-	AnoContrato        *int   `json:"anoContrato"`
-	OrgaoEntidade      struct {
+	NumeroControlePncpCompra string `json:"numeroControlePncpCompra"`
+	NiFornecedor             string `json:"niFornecedor"`
+	DataAssinatura           string `json:"dataAssinatura"`
+	OrgaoEntidade            struct {
 		CNPJ string `json:"cnpj"`
 	} `json:"orgaoEntidade"`
 }
@@ -69,21 +79,23 @@ type recordShape struct {
 // The collector package wraps this behind the generic Fetcher interface.
 // We accept a *transparencia.Client for signature compatibility, but we
 // don't actually use its key; we build our own request.
+//
+// The PNCP consulta API is noticeably slow and occasionally times out on
+// large page sizes. We use a conservative page size and a long per-request
+// timeout so individual requests can wait, while the outer context from
+// the caller still bounds the total run.
 func Fetch(ctx context.Context, _ *transparencia.Client) (*transparencia.FetchResult, error) {
-	httpClient := &http.Client{Timeout: 60 * time.Second}
+	httpClient := &http.Client{Timeout: 3 * time.Minute}
 	result := &transparencia.FetchResult{
 		Source:    SourceID,
 		FetchedAt: time.Now().UTC().Format(time.RFC3339),
 	}
 
-	// PNCP requires dataInicial and dataFinal on contratos. For a full archive
-	// we need to sweep historical windows. The MVP implementation fetches a
-	// rolling 30-day window ending today — that's the "what changed recently"
-	// use case, which fits the tamper-evidence mission and keeps API load low.
-	// A backfill tool for wider windows can be added in v0.3.
+	// PNCP requires dataInicial and dataFinal on contratos. Narrow window
+	// by default so a single run stays inside a few minutes.
 	now := time.Now().UTC()
 	dataFinal := now.Format("20060102")
-	dataInicial := now.AddDate(0, 0, -30).Format("20060102")
+	dataInicial := now.AddDate(0, 0, -WindowDays).Format("20060102")
 
 	page := 1
 	for {
@@ -144,10 +156,11 @@ func Fetch(ctx context.Context, _ *transparencia.Client) (*transparencia.FetchRe
 			if err := json.Unmarshal(item, &meta); err != nil {
 				return nil, fmt.Errorf("pncp: record %d page %d: %w", i, page, err)
 			}
-			externalID := meta.NumeroControlePNCP
+			externalID := meta.NumeroControlePncpCompra
 			if externalID == "" {
-				if meta.SequencialContrato != nil && meta.AnoContrato != nil && meta.OrgaoEntidade.CNPJ != "" {
-					externalID = fmt.Sprintf("%s-%d-%d", meta.OrgaoEntidade.CNPJ, *meta.AnoContrato, *meta.SequencialContrato)
+				// Fallback: compose from orgao + supplier + signature date.
+				if meta.OrgaoEntidade.CNPJ != "" && meta.NiFornecedor != "" && meta.DataAssinatura != "" {
+					externalID = fmt.Sprintf("%s-%s-%s", meta.OrgaoEntidade.CNPJ, meta.NiFornecedor, meta.DataAssinatura)
 				} else {
 					return nil, fmt.Errorf("pncp: record %d page %d has no identifier", i, page)
 				}
@@ -160,10 +173,19 @@ func Fetch(ctx context.Context, _ *transparencia.Client) (*transparencia.FetchRe
 		}
 		result.TotalPages = page
 
+		if envelope.Empty {
+			break
+		}
 		if envelope.TotalPaginas > 0 && page >= envelope.TotalPaginas {
 			break
 		}
+		if envelope.PaginasRestantes == 0 {
+			break
+		}
 		if len(envelope.Data) < PageSize {
+			break
+		}
+		if page >= maxPages {
 			break
 		}
 		page++

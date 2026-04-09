@@ -41,6 +41,7 @@ func New(s *store.Store, logger zerolog.Logger, version, baseURL string) *Server
 // Routes returns an http.Handler with all endpoints wired.
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /{$}", s.handleIndex)
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /sources", s.handleListSources)
 	mux.HandleFunc("GET /snapshots", s.handleListSnapshots)
@@ -48,6 +49,72 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /snapshots/{id}/anchors", s.handleListSnapshotAnchors)
 	mux.HandleFunc("GET /snapshots/{id}/events/{external_id}/proof", s.handleProof)
 	return logging(s.logger, mux)
+}
+
+// handleIndex serves the root endpoint with service metadata, endpoint map,
+// and a lightweight stats summary. Designed for humans visiting the URL
+// without any UI, and for machines doing service discovery.
+func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	sources, _ := s.store.ListSources(ctx)
+	snapshots, _ := s.store.ListSnapshots(ctx, "", 500)
+
+	var totalEvents int
+	var latest *store.Snapshot
+	for i := range snapshots {
+		totalEvents += snapshots[i].RecordCount
+		if latest == nil || snapshots[i].CollectedAt.After(latest.CollectedAt) {
+			latest = &snapshots[i]
+		}
+	}
+
+	resp := map[string]any{
+		"service":     "Fé Pública",
+		"tagline":     "Tamper-evident archive of Brazilian public transparency data, anchored in Bitcoin via OpenTimestamps",
+		"version":     s.version,
+		"repository":  "https://github.com/gmowses/fepublica",
+		"license":     "AGPL-3.0",
+		"base_url":    s.baseURL,
+		"started_at":  s.started.UTC().Format(time.RFC3339),
+		"uptime":      time.Since(s.started).Round(time.Second).String(),
+		"endpoints": map[string]string{
+			"health":    "/health",
+			"sources":   "/sources",
+			"snapshots": "/snapshots",
+			"snapshot":  "/snapshots/{id}",
+			"anchors":   "/snapshots/{id}/anchors",
+			"proof":     "/snapshots/{id}/events/{external_id}/proof",
+		},
+		"stats": map[string]any{
+			"sources":        len(sources),
+			"snapshots":      len(snapshots),
+			"total_events":   totalEvents,
+			"latest_collect": latestTimestamp(latest),
+			"latest_source":  latestSource(latest),
+		},
+		"docs": map[string]string{
+			"design":       "https://github.com/gmowses/fepublica/blob/main/docs/DESIGN.md",
+			"roadmap":      "https://github.com/gmowses/fepublica/blob/main/docs/ROADMAP.md",
+			"verify_cli":   "https://github.com/gmowses/fepublica/tree/main/cmd/verify",
+			"contributing": "https://github.com/gmowses/fepublica/blob/main/CONTRIBUTING.md",
+		},
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func latestTimestamp(s *store.Snapshot) any {
+	if s == nil {
+		return nil
+	}
+	return s.CollectedAt.UTC().Format(time.RFC3339)
+}
+
+func latestSource(s *store.Snapshot) any {
+	if s == nil {
+		return nil
+	}
+	return s.SourceID
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {

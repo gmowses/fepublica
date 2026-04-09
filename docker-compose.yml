@@ -124,6 +124,28 @@ services:
         reservations:
           memory: 64M
 
+  driftd:
+    build:
+      context: .
+      args:
+        TARGET: driftd
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      DRIFT_INTERVAL: ${DRIFT_INTERVAL:-2m}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - fepublica_internal
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          memory: 64M
+
   migrate:
     build:
       context: .

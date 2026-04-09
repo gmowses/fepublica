@@ -62,6 +62,13 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/snapshots/{id}/diff/{other_id}", s.handleDiff)
 	mux.HandleFunc("GET /api/snapshots/{id}/events/{external_id}", s.handleGetEvent)
 	mux.HandleFunc("GET /api/snapshots/{id}/events/{external_id}/proof", s.handleProof)
+
+	// Observatório M1 — drift detector queries
+	mux.HandleFunc("GET /api/diff-runs", s.handleListDiffRuns)
+	mux.HandleFunc("GET /api/diff-runs/{id}", s.handleGetDiffRun)
+	mux.HandleFunc("GET /api/change-events", s.handleListChangeEvents)
+	mux.HandleFunc("GET /api/change-events/{id}", s.handleGetChangeEvent)
+
 	mux.Handle("GET /api/metrics", promhttp.Handler())
 
 	// Legacy unprefixed endpoints that external scripts might still depend on.

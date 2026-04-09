@@ -53,19 +53,19 @@ func NewSeeder(s *store.Store, logger zerolog.Logger) *Seeder {
 	return &Seeder{store: s, logger: logger}
 }
 
-// Run seeds all three sources in order: UFs → federal YAML → IBGE municipalities.
-// federalYAMLPath is the path to entes-federal.yaml (relative or absolute).
+// Run seeds all three sources in order. Federal YAML must come first because
+// UFs and municipalities reference fed:uniao as parent_id.
 func (s *Seeder) Run(ctx context.Context, federalYAMLPath string) error {
-	s.logger.Info().Msg("entes: seeding UFs")
-	if err := s.seedUFs(ctx); err != nil {
-		return fmt.Errorf("seed ufs: %w", err)
-	}
-
 	if federalYAMLPath != "" {
 		s.logger.Info().Str("path", federalYAMLPath).Msg("entes: seeding federal YAML")
 		if err := s.seedFederalYAML(ctx, federalYAMLPath); err != nil {
 			return fmt.Errorf("seed federal yaml: %w", err)
 		}
+	}
+
+	s.logger.Info().Msg("entes: seeding UFs")
+	if err := s.seedUFs(ctx); err != nil {
+		return fmt.Errorf("seed ufs: %w", err)
 	}
 
 	s.logger.Info().Msg("entes: fetching and seeding IBGE municipalities")

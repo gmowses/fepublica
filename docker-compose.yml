@@ -218,6 +218,27 @@ services:
         reservations:
           memory: 128M
 
+  contratos-indexer:
+    build:
+      context: .
+      args:
+        TARGET: contratos-indexer
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - fepublica_internal
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          memory: 64M
+
   migrate:
     build:
       context: .

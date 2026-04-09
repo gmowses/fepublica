@@ -11,6 +11,8 @@ import { NotFound } from "./pages/NotFound";
 import { Observatorio } from "./pages/Observatorio";
 import { Entes } from "./pages/Entes";
 import { EnteDetail } from "./pages/EnteDetail";
+import { Gastos } from "./pages/Gastos";
+import { Fornecedor } from "./pages/Fornecedor";
 
 export default function App() {
   return (
@@ -28,6 +30,8 @@ export default function App() {
         <Route path="/observatorio" element={<Observatorio />} />
         <Route path="/entes" element={<Entes />} />
         <Route path="/entes/:id" element={<EnteDetail />} />
+        <Route path="/gastos" element={<Gastos />} />
+        <Route path="/gastos/fornecedores/:ni" element={<Fornecedor />} />
         <Route path="/about" element={<About />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

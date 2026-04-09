@@ -70,10 +70,10 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/change-events/{id}", s.handleGetChangeEvent)
 
 	// Observatório M2 — public feeds
-	mux.HandleFunc("GET /api/feeds/all.atom", s.handleFeedAtomAll)
-	mux.HandleFunc("GET /api/feeds/all.json", s.handleFeedJSONAll)
-	mux.HandleFunc("GET /api/feeds/sources/{source_id}.atom", s.handleFeedAtomBySource)
-	mux.HandleFunc("GET /api/feeds/sources/{source_id}.json", s.handleFeedJSONBySource)
+	mux.HandleFunc("GET /api/feeds/all/atom", s.handleFeedAtomAll)
+	mux.HandleFunc("GET /api/feeds/all/json", s.handleFeedJSONAll)
+	mux.HandleFunc("GET /api/feeds/source/{source_id}/atom", s.handleFeedAtomBySource)
+	mux.HandleFunc("GET /api/feeds/source/{source_id}/json", s.handleFeedJSONBySource)
 
 	mux.Handle("GET /api/metrics", promhttp.Handler())
 

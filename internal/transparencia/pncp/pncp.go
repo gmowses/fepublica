@@ -112,28 +112,17 @@ func Fetch(ctx context.Context, _ *transparencia.Client) (*transparencia.FetchRe
 		q.Set("tamanhoPagina", strconv.Itoa(PageSize))
 
 		fullURL := DefaultBaseURL + Path + "?" + q.Encode()
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
-		if err != nil {
-			return nil, fmt.Errorf("pncp: build request: %w", err)
-		}
-		req.Header.Set("Accept", "application/json")
-		req.Header.Set("User-Agent", "fepublica/0.1 (+https://github.com/gmowses/fepublica)")
 
-		resp, err := httpClient.Do(req)
+		body, status, err := doWithRetry(ctx, httpClient, fullURL)
 		if err != nil {
 			return nil, fmt.Errorf("pncp: request page %d: %w", page, err)
 		}
-		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
-		resp.Body.Close()
-		if readErr != nil {
-			return nil, fmt.Errorf("pncp: read body: %w", readErr)
-		}
-		if resp.StatusCode == http.StatusNoContent || len(body) == 0 {
+		if status == http.StatusNoContent || len(body) == 0 {
 			break
 		}
-		if resp.StatusCode != http.StatusOK {
+		if status != http.StatusOK {
 			return nil, fmt.Errorf("pncp: unexpected status %d on page %d: %s",
-				resp.StatusCode, page, truncate(string(body), 200))
+				status, page, truncate(string(body), 200))
 		}
 
 		var envelope pageResponse
@@ -199,4 +188,70 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
+}
+
+// doWithRetry performs a GET with exponential backoff on transient failures.
+// PNCP's consulta API is historically flaky and frequently returns HTTP 500
+// "Erro na comunicação com o banco de dados" under load. Retrying with a
+// generous delay usually recovers.
+func doWithRetry(ctx context.Context, client *http.Client, url string) ([]byte, int, error) {
+	const maxAttempts = 5
+	backoff := 5 * time.Second
+
+	var lastErr error
+	var lastStatus int
+	var lastBody []byte
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if attempt > 1 {
+			select {
+			case <-ctx.Done():
+				return nil, 0, ctx.Err()
+			case <-time.After(backoff):
+			}
+			backoff *= 2
+			if backoff > 60*time.Second {
+				backoff = 60 * time.Second
+			}
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, 0, fmt.Errorf("build request: %w", err)
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", "fepublica/0.1 (+https://github.com/gmowses/fepublica)")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+		resp.Body.Close()
+		if readErr != nil {
+			lastErr = readErr
+			continue
+		}
+		lastBody = body
+		lastStatus = resp.StatusCode
+
+		// Retry transient upstream failures.
+		if resp.StatusCode >= 500 && resp.StatusCode != http.StatusNotImplemented {
+			lastErr = fmt.Errorf("upstream status %d: %s", resp.StatusCode, truncate(string(body), 200))
+			continue
+		}
+		if resp.StatusCode == http.StatusTooManyRequests {
+			lastErr = fmt.Errorf("upstream 429 rate limited")
+			continue
+		}
+
+		// Success or non-retryable status — return immediately.
+		return body, resp.StatusCode, nil
+	}
+
+	if lastStatus != 0 {
+		return lastBody, lastStatus, lastErr
+	}
+	return nil, 0, fmt.Errorf("all %d attempts failed: %w", maxAttempts, lastErr)
 }

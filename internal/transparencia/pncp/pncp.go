@@ -20,6 +20,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"time"
 
@@ -95,9 +96,19 @@ func Fetch(ctx context.Context, _ *transparencia.Client) (*transparencia.FetchRe
 	// consulta API is historically slow and often 500s on wider windows,
 	// so we use a narrow default (1 day back from today). Run it multiple
 	// days per week via the scheduler to accumulate history.
+	//
+	// For backfills or testing, the window can be overridden with the
+	// PNCP_FROM and PNCP_TO env vars (YYYYMMDD format), e.g. to seed
+	// contratos data from a known-good historical window.
 	now := time.Now().UTC()
 	dataFinal := now.Format("20060102")
 	dataInicial := now.AddDate(0, 0, -1).Format("20060102")
+	if v := os.Getenv("PNCP_FROM"); v != "" {
+		dataInicial = v
+	}
+	if v := os.Getenv("PNCP_TO"); v != "" {
+		dataFinal = v
+	}
 	_ = WindowDays // reserved for a future explicit-window caller
 
 	page := 1

@@ -334,13 +334,13 @@ git clone https://github.com/gmowses/fepublica &amp;&amp; cd fepublica &amp;&amp
       const rows = snapArr.slice(0, 20).map(s => {
         const anchored = s.merkle_root ? '<span class="badge ok">ancorado</span>' : '<span class="badge warn">pendente</span>';
         return `<tr>
-          <td class="mono">#${s.id}</td>
+          <td class="mono"><a href="/view/snapshots/${s.id}">#${s.id}</a></td>
           <td>${s.source_id}</td>
           <td>${fmtDate(s.collected_at)}</td>
           <td style="text-align:right">${fmtNum(s.record_count)}</td>
           <td class="hash" title="${s.merkle_root || ''}">${shortHex(s.merkle_root)}</td>
           <td>${anchored}</td>
-          <td><a href="/snapshots/${s.id}">json</a> · <a href="/snapshots/${s.id}/anchors">anchors</a></td>
+          <td><a href="/view/snapshots/${s.id}">explorar ▸</a></td>
         </tr>`;
       }).join("");
       host.innerHTML = `<table>

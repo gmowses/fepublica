@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Snapshot #{{SNAPSHOT_ID}} — Fé Pública</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔗</text></svg>">
+  <style>
+    :root {
+      --bg:#0b0f17; --bg-soft:#11161f; --bg-card:#161c28; --border:#232b3b;
+      --text:#e6edf3; --text-dim:#8b98a9; --accent:#ffd166; --accent-2:#4cc9a3;
+      --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+    }
+    @media (prefers-color-scheme: light) {
+      :root { --bg:#fafaf7; --bg-soft:#f0f0ea; --bg-card:#fff; --border:#e0e0d6; --text:#181818; --text-dim:#5a5a58; --accent:#a76c00; --accent-2:#0d7a5f; }
+    }
+    * { box-sizing: border-box; }
+    html,body { margin:0; padding:0; }
+    body { font-family: var(--sans); background: var(--bg); color: var(--text); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+    .nav { font-family: var(--mono); font-size: 0.82rem; color: var(--text-dim); margin-bottom: 16px; }
+    .nav a { color: var(--text-dim); }
+    h1 { font-size: 1.6rem; margin: 0 0 8px; letter-spacing: -0.01em; }
+    .sub { color: var(--text-dim); font-family: var(--mono); font-size: 0.85rem; margin-bottom: 24px; }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+    .card .k { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); }
+    .card .v { font-size: 1.1rem; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; word-break: break-all; }
+    .hash { font-family: var(--mono); font-size: 0.72rem; color: var(--text-dim); word-break: break-all; }
+    .tools { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+    input[type=search] {
+      flex: 1;
+      min-width: 200px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.9rem;
+    }
+    input[type=search]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .muted { color: var(--text-dim); font-size: 0.85rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { color: var(--text-dim); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; }
+    td.mono { font-family: var(--mono); font-size: 0.85rem; }
+    td.hash-c { font-family: var(--mono); font-size: 0.72rem; color: var(--text-dim); max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pager { display: flex; gap: 8px; margin-top: 16px; align-items: center; }
+    .pager button { background: var(--bg-card); border: 1px solid var(--border); color: var(--text); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-family: var(--mono); }
+    .pager button:hover:not(:disabled) { border-color: var(--accent); }
+    .pager button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .pager .info { color: var(--text-dim); font-family: var(--mono); font-size: 0.82rem; margin-left: auto; }
+    footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 0.82rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="nav"><a href="/">← Fé Pública</a> / snapshots / <strong>#{{SNAPSHOT_ID}}</strong></div>
+    <h1>Snapshot #{{SNAPSHOT_ID}}</h1>
+    <div class="sub" id="sub">fonte: <strong>{{SOURCE_ID}}</strong> · coletado em {{COLLECTED_AT}}</div>
+
+    <div class="meta-grid">
+      <div class="card"><div class="k">registros</div><div class="v">{{RECORD_COUNT}}</div></div>
+      <div class="card"><div class="k">tamanho</div><div class="v">{{BYTES_SIZE}}</div></div>
+      <div class="card"><div class="k">coletor</div><div class="v" style="font-size:0.95rem">{{COLLECTOR_VERSION}}</div></div>
+      <div class="card" style="grid-column: span 2;">
+        <div class="k">raiz merkle</div>
+        <div class="hash" style="margin-top:4px;">{{MERKLE_ROOT}}</div>
+      </div>
+    </div>
+
+    <h2 style="font-size:1.1rem; margin: 24px 0 8px;">Âncoras</h2>
+    <div id="anchors" class="muted">carregando…</div>
+
+    <h2 style="font-size:1.1rem; margin: 32px 0 8px;">Eventos</h2>
+    <div class="tools">
+      <input id="search" type="search" placeholder="filtrar por external_id (ex: 277765, cnpj parcial, …)" autocomplete="off">
+      <span class="muted" id="search-hint"></span>
+    </div>
+    <div id="events">carregando…</div>
+    <div class="pager" id="pager" hidden>
+      <button id="prev" type="button">◀ anterior</button>
+      <button id="next" type="button">próximo ▶</button>
+      <div class="info" id="pageinfo"></div>
+    </div>
+
+    <footer>
+      <a href="/">← voltar à página inicial</a>
+      &nbsp;·&nbsp;
+      <a href="/snapshots/{{SNAPSHOT_ID}}">JSON do snapshot</a>
+      &nbsp;·&nbsp;
+      <a href="/snapshots/{{SNAPSHOT_ID}}/anchors">JSON das âncoras</a>
+    </footer>
+  </div>
+
+<script>
+(() => {
+  const SNAP_ID = {{SNAPSHOT_ID}};
+  const PAGE_SIZE = 50;
+  let offset = 0;
+  let total = 0;
+  let search = "";
+  let searchTimer = null;
+
+  const $ = id => document.getElementById(id);
+  const fmtNum = n => n == null ? "—" : n.toLocaleString("pt-BR");
+  const shortHex = h => h ? (h.slice(0,10) + "…") : "—";
+  const fmtDate = s => s ? new Date(s).toLocaleString("pt-BR") : "—";
+
+  async function loadAnchors() {
+    const host = $("anchors");
+    try {
+      const r = await fetch("/snapshots/" + SNAP_ID + "/anchors").then(r => r.json());
+      const rows = (r.anchors || []).map(a => {
+        const status = a.upgraded ? `<span style="color:var(--accent-2)">upgraded</span>${a.block_height ? ` (block ${a.block_height})` : ''}` : 'pending';
+        return `<tr>
+          <td class="mono">#${a.id}</td>
+          <td><a href="${a.calendar_url}" target="_blank" rel="noopener">${new URL(a.calendar_url).host}</a></td>
+          <td>${fmtDate(a.submitted_at)}</td>
+          <td>${status}</td>
+          <td class="mono">${a.receipt_bytes} B</td>
+        </tr>`;
+      }).join("");
+      if (rows) {
+        host.innerHTML = `<table>
+          <thead><tr><th>id</th><th>calendar</th><th>submetido</th><th>status</th><th>receipt</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+      } else {
+        host.innerHTML = '<p class="muted">Sem âncoras associadas.</p>';
+      }
+    } catch (err) {
+      host.innerHTML = '<p class="muted">erro ao carregar âncoras</p>';
+      console.error(err);
+    }
+  }
+
+  async function loadEvents() {
+    const host = $("events");
+    host.textContent = "carregando…";
+    const params = new URLSearchParams({
+      limit: PAGE_SIZE,
+      offset: offset,
+    });
+    if (search) params.set("search", search);
+    try {
+      const r = await fetch("/snapshots/" + SNAP_ID + "/events?" + params.toString()).then(r => r.json());
+      total = r.total || 0;
+      const events = r.events || [];
+      if (!events.length) {
+        host.innerHTML = '<p class="muted">Nenhum evento encontrado' + (search ? ` para "${search}"` : '') + '.</p>';
+        $("pager").hidden = true;
+        return;
+      }
+      const rows = events.map(e => `<tr>
+        <td class="mono"><a href="/view/snapshots/${SNAP_ID}/events/${encodeURIComponent(e.external_id)}">${e.external_id}</a></td>
+        <td class="hash-c" title="${e.content_hash}">${shortHex(e.content_hash)}</td>
+        <td><a href="/snapshots/${SNAP_ID}/events/${encodeURIComponent(e.external_id)}/proof" class="muted">proof ↓</a></td>
+      </tr>`).join("");
+      host.innerHTML = `<table>
+        <thead><tr><th>external_id</th><th>content hash</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+
+      const end = Math.min(offset + events.length, total);
+      $("pageinfo").textContent = `${fmtNum(offset + 1)}–${fmtNum(end)} de ${fmtNum(total)}`;
+      $("prev").disabled = offset === 0;
+      $("next").disabled = offset + events.length >= total;
+      $("pager").hidden = false;
+    } catch (err) {
+      host.innerHTML = '<p class="muted">erro ao carregar eventos</p>';
+      console.error(err);
+    }
+  }
+
+  $("search").addEventListener("input", e => {
+    clearTimeout(searchTimer);
+    const v = e.target.value.trim();
+    searchTimer = setTimeout(() => {
+      search = v;
+      offset = 0;
+      $("search-hint").textContent = search ? `filtrando: "${search}"` : "";
+      loadEvents();
+    }, 300);
+  });
+  $("prev").addEventListener("click", () => {
+    offset = Math.max(0, offset - PAGE_SIZE);
+    loadEvents();
+  });
+  $("next").addEventListener("click", () => {
+    offset += PAGE_SIZE;
+    loadEvents();
+  });
+
+  loadAnchors();
+  loadEvents();
+})();
+</script>
+</body>
+</html>

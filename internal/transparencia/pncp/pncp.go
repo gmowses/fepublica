@@ -85,17 +85,20 @@ type recordShape struct {
 // timeout so individual requests can wait, while the outer context from
 // the caller still bounds the total run.
 func Fetch(ctx context.Context, _ *transparencia.Client) (*transparencia.FetchResult, error) {
-	httpClient := &http.Client{Timeout: 3 * time.Minute}
+	httpClient := &http.Client{Timeout: 5 * time.Minute}
 	result := &transparencia.FetchResult{
 		Source:    SourceID,
 		FetchedAt: time.Now().UTC().Format(time.RFC3339),
 	}
 
-	// PNCP requires dataInicial and dataFinal on contratos. Narrow window
-	// by default so a single run stays inside a few minutes.
+	// PNCP requires dataInicial and dataFinal on contratos. The public
+	// consulta API is historically slow and often 500s on wider windows,
+	// so we use a narrow default (1 day back from today). Run it multiple
+	// days per week via the scheduler to accumulate history.
 	now := time.Now().UTC()
 	dataFinal := now.Format("20060102")
-	dataInicial := now.AddDate(0, 0, -WindowDays).Format("20060102")
+	dataInicial := now.AddDate(0, 0, -1).Format("20060102")
+	_ = WindowDays // reserved for a future explicit-window caller
 
 	page := 1
 	for {

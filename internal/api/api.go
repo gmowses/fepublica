@@ -43,16 +43,137 @@ func New(s *store.Store, logger zerolog.Logger, version, baseURL string) *Server
 // Routes returns an http.Handler with all endpoints wired.
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
+	// HTML views (browser-friendly)
 	mux.HandleFunc("GET /{$}", s.handleIndex)
+	mux.HandleFunc("GET /view/snapshots/{id}", s.handleViewSnapshot)
+	mux.HandleFunc("GET /view/snapshots/{id}/events/{external_id}", s.handleViewEvent)
+
+	// JSON API
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /sources", s.handleListSources)
 	mux.HandleFunc("GET /snapshots", s.handleListSnapshots)
 	mux.HandleFunc("GET /snapshots/{id}", s.handleGetSnapshot)
 	mux.HandleFunc("GET /snapshots/{id}/anchors", s.handleListSnapshotAnchors)
+	mux.HandleFunc("GET /snapshots/{id}/events", s.handleListSnapshotEvents)
 	mux.HandleFunc("GET /snapshots/{id}/diff/{other_id}", s.handleDiff)
+	mux.HandleFunc("GET /snapshots/{id}/events/{external_id}", s.handleGetEvent)
 	mux.HandleFunc("GET /snapshots/{id}/events/{external_id}/proof", s.handleProof)
+
+	// Metrics
 	mux.Handle("GET /metrics", promhttp.Handler())
 	return logging(s.logger, mux)
+}
+
+// handleListSnapshotEvents returns a paginated, lightweight list of events of a snapshot.
+// Supports ?search=<substring> to filter by external_id (case-insensitive) and
+// ?limit=&offset= for pagination. Does NOT include the canonical_json payload
+// — use GET /snapshots/{id}/events/{external_id} for a single full event.
+func (s *Server) handleListSnapshotEvents(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	q := r.URL.Query()
+	limit := 100
+	if v := q.Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 1000 {
+			limit = n
+		}
+	}
+	offset := 0
+	if v := q.Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+	search := q.Get("search")
+
+	events, total, err := s.store.ListEventMeta(r.Context(), store.ListEventMetaParams{
+		SnapshotID: id,
+		Search:     search,
+		Limit:      limit,
+		Offset:     offset,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	out := make([]map[string]any, 0, len(events))
+	for _, e := range events {
+		out = append(out, map[string]any{
+			"id":           e.ID,
+			"external_id":  e.ExternalID,
+			"content_hash": store.HexHash(e.ContentHash),
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"snapshot_id": id,
+		"total":       total,
+		"limit":       limit,
+		"offset":      offset,
+		"search":      search,
+		"events":      out,
+	})
+}
+
+// handleGetEvent returns a single event (with its canonical_json payload).
+func (s *Server) handleGetEvent(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	externalID := r.PathValue("external_id")
+	if externalID == "" {
+		writeError(w, http.StatusBadRequest, errors.New("missing external_id"))
+		return
+	}
+	ev, err := s.store.GetEventByExternalID(r.Context(), id, externalID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":             ev.ID,
+		"snapshot_id":    ev.SnapshotID,
+		"source_id":      ev.SourceID,
+		"external_id":    ev.ExternalID,
+		"content_hash":   store.HexHash(ev.ContentHash),
+		"canonical_json": json.RawMessage(ev.CanonicalJSON),
+	})
+}
+
+// handleViewSnapshot serves the HTML page for browsing a snapshot's events.
+func (s *Server) handleViewSnapshot(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	snap, err := s.store.GetSnapshot(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	serveSnapshotHTML(w, snap)
+}
+
+// handleViewEvent serves the HTML page for a single event.
+func (s *Server) handleViewEvent(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	externalID := r.PathValue("external_id")
+	_, err = s.store.GetSnapshot(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	serveEventHTML(w, id, externalID)
 }
 
 // handleDiff returns the set difference between two snapshots of the same source.

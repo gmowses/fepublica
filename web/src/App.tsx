@@ -8,6 +8,9 @@ import { SourceDetail } from "./pages/SourceDetail";
 import { Recent } from "./pages/Recent";
 import { About } from "./pages/About";
 import { NotFound } from "./pages/NotFound";
+import { Observatorio } from "./pages/Observatorio";
+import { Entes } from "./pages/Entes";
+import { EnteDetail } from "./pages/EnteDetail";
 
 export default function App() {
   return (
@@ -22,6 +25,9 @@ export default function App() {
         <Route path="/diff/:a/:b" element={<DiffViewer />} />
         <Route path="/sources/:id" element={<SourceDetail />} />
         <Route path="/recent" element={<Recent />} />
+        <Route path="/observatorio" element={<Observatorio />} />
+        <Route path="/entes" element={<Entes />} />
+        <Route path="/entes/:id" element={<EnteDetail />} />
         <Route path="/about" element={<About />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

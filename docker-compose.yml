@@ -61,8 +61,10 @@ services:
         condition: service_healthy
     networks:
       - fepublica_internal
+    # Bind API only to loopback. In production, Traefik reaches it via the
+    # docker network; in dev, `curl localhost:8080` still works.
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     healthcheck:
       test: ["CMD", "/usr/local/bin/app", "healthcheck"]
       interval: 30s

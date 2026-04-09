@@ -28,8 +28,6 @@ services:
     ports: []
 
   api:
-    # Remove host port binding — Traefik handles ingress.
-    ports: []
     environment:
       API_BASE_URL: "https://fepublica.gmowses.cloud"
     networks:

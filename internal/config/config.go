@@ -48,6 +48,7 @@ type OTSConfig struct {
 type CollectorConfig struct {
 	CEISSchedule string
 	CNEPSchedule string
+	PNCPSchedule string
 }
 
 type AnchorConfig struct {
@@ -88,6 +89,7 @@ func Load() (*Config, error) {
 		Collector: CollectorConfig{
 			CEISSchedule: getenv("COLLECTOR_CEIS_SCHEDULE", "0 4 * * *"),
 			CNEPSchedule: getenv("COLLECTOR_CNEP_SCHEDULE", "15 4 * * *"),
+			PNCPSchedule: getenv("COLLECTOR_PNCP_SCHEDULE", "30 4 * * *"),
 		},
 		Anchor: AnchorConfig{
 			BatchInterval: getenvDuration("ANCHOR_BATCH_INTERVAL", 6*time.Hour),

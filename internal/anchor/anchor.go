@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/gmowses/fepublica/internal/merkle"
+	"github.com/gmowses/fepublica/internal/metrics"
 	"github.com/gmowses/fepublica/internal/ots"
 	"github.com/gmowses/fepublica/internal/store"
 )
@@ -81,6 +82,7 @@ func (w *Worker) buildPendingRoots(ctx context.Context) error {
 		if err := w.store.SetSnapshotMerkleRoot(ctx, snap.ID, root[:]); err != nil {
 			return fmt.Errorf("anchor: set root for snapshot %d: %w", snap.ID, err)
 		}
+		metrics.AnchorBuildRootsTotal.Inc()
 		w.logger.Info().
 			Int64("snapshot_id", snap.ID).
 			Int("leaves", len(leaves)).
@@ -102,6 +104,7 @@ func (w *Worker) submitMissingAnchors(ctx context.Context) error {
 			}
 			receipt, err := w.otsClient.Submit(ctx, cal, snap.MerkleRoot)
 			if err != nil {
+				metrics.AnchorSubmitTotal.WithLabelValues(cal, "error").Inc()
 				w.logger.Error().
 					Err(err).
 					Int64("snapshot_id", snap.ID).
@@ -109,6 +112,7 @@ func (w *Worker) submitMissingAnchors(ctx context.Context) error {
 					Msg("anchor: submit failed")
 				continue
 			}
+			metrics.AnchorSubmitTotal.WithLabelValues(cal, "ok").Inc()
 			_, err = w.store.InsertAnchor(ctx, store.InsertAnchorParams{
 				SnapshotID:  snap.ID,
 				CalendarURL: cal,
@@ -150,12 +154,14 @@ func (w *Worker) upgradePendingAnchors(ctx context.Context) error {
 		newReceipt, err := w.otsClient.Upgrade(ctx, a.CalendarURL, snap.MerkleRoot)
 		if err != nil {
 			if errors.Is(err, ots.ErrNotReady) {
+				metrics.AnchorUpgradeTotal.WithLabelValues(a.CalendarURL, "not_ready").Inc()
 				w.logger.Debug().
 					Int64("anchor_id", a.ID).
 					Str("calendar", a.CalendarURL).
 					Msg("anchor: upgrade not ready yet")
 				continue
 			}
+			metrics.AnchorUpgradeTotal.WithLabelValues(a.CalendarURL, "error").Inc()
 			w.logger.Error().
 				Err(err).
 				Int64("anchor_id", a.ID).
@@ -164,9 +170,11 @@ func (w *Worker) upgradePendingAnchors(ctx context.Context) error {
 			continue
 		}
 		if err := w.store.MarkAnchorUpgraded(ctx, a.ID, newReceipt, nil); err != nil {
+			metrics.AnchorUpgradeTotal.WithLabelValues(a.CalendarURL, "persist_error").Inc()
 			w.logger.Error().Err(err).Int64("anchor_id", a.ID).Msg("anchor: mark upgraded failed")
 			continue
 		}
+		metrics.AnchorUpgradeTotal.WithLabelValues(a.CalendarURL, "ok").Inc()
 		w.logger.Info().
 			Int64("anchor_id", a.ID).
 			Str("calendar", a.CalendarURL).

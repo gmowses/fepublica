@@ -12,9 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 
 	"github.com/gmowses/fepublica/internal/merkle"
+	"github.com/gmowses/fepublica/internal/metrics"
 	"github.com/gmowses/fepublica/internal/store"
 )
 
@@ -47,8 +49,124 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /snapshots", s.handleListSnapshots)
 	mux.HandleFunc("GET /snapshots/{id}", s.handleGetSnapshot)
 	mux.HandleFunc("GET /snapshots/{id}/anchors", s.handleListSnapshotAnchors)
+	mux.HandleFunc("GET /snapshots/{id}/diff/{other_id}", s.handleDiff)
 	mux.HandleFunc("GET /snapshots/{id}/events/{external_id}/proof", s.handleProof)
+	mux.Handle("GET /metrics", promhttp.Handler())
 	return logging(s.logger, mux)
+}
+
+// handleDiff returns the set difference between two snapshots of the same source.
+// For each external_id, classifies it as added (in b, not in a), removed (in a,
+// not in b), or changed (in both but with different content_hash).
+func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
+	idA, err := parseID(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	idB, err := parseID(r.PathValue("other_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	snapA, err := s.store.GetSnapshot(r.Context(), idA)
+	if err != nil {
+		writeError(w, http.StatusNotFound, fmt.Errorf("snapshot %d: %w", idA, err))
+		return
+	}
+	snapB, err := s.store.GetSnapshot(r.Context(), idB)
+	if err != nil {
+		writeError(w, http.StatusNotFound, fmt.Errorf("snapshot %d: %w", idB, err))
+		return
+	}
+	if snapA.SourceID != snapB.SourceID {
+		writeError(w, http.StatusBadRequest,
+			fmt.Errorf("cannot diff snapshots from different sources (%s vs %s)",
+				snapA.SourceID, snapB.SourceID))
+		return
+	}
+
+	eventsA, err := s.store.ListEventsBySnapshot(r.Context(), idA)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	eventsB, err := s.store.ListEventsBySnapshot(r.Context(), idB)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	mapA := make(map[string]store.Event, len(eventsA))
+	for _, e := range eventsA {
+		mapA[e.ExternalID] = e
+	}
+	mapB := make(map[string]store.Event, len(eventsB))
+	for _, e := range eventsB {
+		mapB[e.ExternalID] = e
+	}
+
+	type diffItem struct {
+		ExternalID string `json:"external_id"`
+		HashA      string `json:"hash_a,omitempty"`
+		HashB      string `json:"hash_b,omitempty"`
+	}
+
+	var added, removed, changed []diffItem
+	for id, eb := range mapB {
+		ea, ok := mapA[id]
+		if !ok {
+			added = append(added, diffItem{ExternalID: id, HashB: store.HexHash(eb.ContentHash)})
+			continue
+		}
+		if !bytesEqual(ea.ContentHash, eb.ContentHash) {
+			changed = append(changed, diffItem{
+				ExternalID: id,
+				HashA:      store.HexHash(ea.ContentHash),
+				HashB:      store.HexHash(eb.ContentHash),
+			})
+		}
+	}
+	for id, ea := range mapA {
+		if _, ok := mapB[id]; !ok {
+			removed = append(removed, diffItem{ExternalID: id, HashA: store.HexHash(ea.ContentHash)})
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"source_id": snapA.SourceID,
+		"snapshot_a": map[string]any{
+			"id":            idA,
+			"collected_at":  snapA.CollectedAt.UTC().Format(time.RFC3339),
+			"record_count":  snapA.RecordCount,
+		},
+		"snapshot_b": map[string]any{
+			"id":            idB,
+			"collected_at":  snapB.CollectedAt.UTC().Format(time.RFC3339),
+			"record_count":  snapB.RecordCount,
+		},
+		"summary": map[string]int{
+			"added":   len(added),
+			"removed": len(removed),
+			"changed": len(changed),
+		},
+		"added":   added,
+		"removed": removed,
+		"changed": changed,
+	})
+}
+
+func bytesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // handleIndex serves the root endpoint. Browsers (Accept: text/html) get the
@@ -422,20 +540,53 @@ func parseID(s string) (int64, error) {
 	return n, nil
 }
 
-// logging is a small middleware that logs each request at debug level.
+// logging is a small middleware that logs each request at debug level and
+// records Prometheus metrics. The route label is a simplified version of the
+// path (with numeric ids and external ids collapsed) so the cardinality stays
+// bounded.
 func logging(logger zerolog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w, code: 200}
 		next.ServeHTTP(rec, r)
+		elapsed := time.Since(start)
+		route := collapseRoute(r.URL.Path)
 		logger.Debug().
 			Str("method", r.Method).
 			Str("path", r.URL.Path).
+			Str("route", route).
 			Str("remote", clientIP(r)).
 			Int("status", rec.code).
-			Dur("elapsed", time.Since(start)).
+			Dur("elapsed", elapsed).
 			Msg("api: request")
+		metrics.APIRequestsTotal.WithLabelValues(route, strconv.Itoa(rec.code)).Inc()
+		metrics.APIRequestDuration.WithLabelValues(route).Observe(elapsed.Seconds())
 	})
+}
+
+// collapseRoute produces a low-cardinality label from a URL path by replacing
+// numeric and opaque segments with placeholders.
+func collapseRoute(p string) string {
+	parts := strings.Split(p, "/")
+	for i, seg := range parts {
+		if seg == "" {
+			continue
+		}
+		// Numeric id -> {id}
+		if _, err := strconv.ParseInt(seg, 10, 64); err == nil {
+			parts[i] = "{id}"
+			continue
+		}
+		// Long opaque segment (e.g. external_id) -> {ext}
+		if len(seg) > 32 {
+			parts[i] = "{ext}"
+		}
+	}
+	out := strings.Join(parts, "/")
+	if out == "" {
+		return "/"
+	}
+	return out
 }
 
 type statusRecorder struct {

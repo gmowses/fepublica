@@ -13,6 +13,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/gmowses/fepublica/internal/canonjson"
+	"github.com/gmowses/fepublica/internal/metrics"
 	"github.com/gmowses/fepublica/internal/store"
 	"github.com/gmowses/fepublica/internal/transparencia"
 )
@@ -39,10 +40,19 @@ func New(s *store.Store, client *transparencia.Client, logger zerolog.Logger, ve
 }
 
 // RunOnce executes a single collection cycle for the given source.
-func (c *Collector) RunOnce(ctx context.Context, sourceID string, fetcher Fetcher) error {
+func (c *Collector) RunOnce(ctx context.Context, sourceID string, fetcher Fetcher) (err error) {
 	log := c.logger.With().Str("source", sourceID).Logger()
 	log.Info().Msg("collector: starting run")
 	start := time.Now()
+
+	defer func() {
+		metrics.CollectorRunDuration.WithLabelValues(sourceID).Observe(time.Since(start).Seconds())
+		status := "ok"
+		if err != nil {
+			status = "error"
+		}
+		metrics.CollectorRunsTotal.WithLabelValues(sourceID, status).Inc()
+	}()
 
 	if _, err := c.store.GetSource(ctx, sourceID); err != nil {
 		return fmt.Errorf("collector: source %q not registered: %w", sourceID, err)
@@ -109,6 +119,8 @@ func (c *Collector) RunOnce(ctx context.Context, sourceID string, fetcher Fetche
 	if err != nil {
 		return fmt.Errorf("collector: insert events (%d of %d inserted): %w", inserted, len(events), err)
 	}
+
+	metrics.CollectorRecordsTotal.WithLabelValues(sourceID).Add(float64(inserted))
 
 	log.Info().
 		Int64("snapshot_id", snapshotID).

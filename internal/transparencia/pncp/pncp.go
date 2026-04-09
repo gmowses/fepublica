@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -126,6 +127,8 @@ func Fetch(ctx context.Context, _ *transparencia.Client) (*transparencia.FetchRe
 		q.Set("tamanhoPagina", strconv.Itoa(PageSize))
 
 		fullURL := DefaultBaseURL + Path + "?" + q.Encode()
+		pageStart := time.Now()
+		log.Printf("pncp: fetching page %d (%s to %s)", page, dataInicial, dataFinal)
 
 		body, status, err := doWithRetry(ctx, httpClient, fullURL)
 		if err != nil {
@@ -175,6 +178,8 @@ func Fetch(ctx context.Context, _ *transparencia.Client) (*transparencia.FetchRe
 			result.TotalBytes += int64(len(item))
 		}
 		result.TotalPages = page
+		log.Printf("pncp: page %d done in %s (records=%d total_so_far=%d total_pages=%d)",
+			page, time.Since(pageStart).Round(time.Second), len(envelope.Data), len(result.Records), envelope.TotalPaginas)
 
 		if envelope.Empty {
 			break

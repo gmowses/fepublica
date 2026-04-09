@@ -44,3 +44,7 @@ logs/
 # Local artifacts
 tmp/
 .tmp/
+
+# Frontend
+web/node_modules/
+web/dist/

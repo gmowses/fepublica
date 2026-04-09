@@ -1,4 +1,4 @@
-.PHONY: help build test lint tidy dev up down logs migrate clean verify-cli docker-build
+.PHONY: help build test lint tidy dev up down logs migrate clean verify-cli docker-build web web-dev web-clean
 
 APP=fepublica
 GO=go
@@ -8,12 +8,27 @@ LDFLAGS=-s -w -X main.version=$(shell git describe --tags --always --dirty 2>/de
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make \033[36m<target>\033[0m\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
-build: ## Build all binaries to bin/
+build: web ## Build all binaries to bin/ (runs web build first so SPA is embedded)
 	@mkdir -p bin
 	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o bin/collector ./cmd/collector
 	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o bin/anchor ./cmd/anchor
 	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o bin/api ./cmd/api
 	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o bin/verify ./cmd/verify
+
+web: ## Build the React SPA and copy to internal/api/spa for embedding
+	@echo "==> building web SPA"
+	@if [ ! -d web/node_modules ]; then cd web && npm install --silent; fi
+	@cd web && npm run build
+	@rm -rf internal/api/spa
+	@mkdir -p internal/api/spa
+	@cp -r web/dist/* internal/api/spa/
+	@echo "==> SPA built and copied to internal/api/spa/"
+
+web-dev: ## Run the Vite dev server (proxies /api to localhost:8080)
+	@cd web && npm run dev
+
+web-clean: ## Remove web build artifacts
+	rm -rf web/node_modules web/dist internal/api/spa
 
 test: ## Run unit tests with race detector
 	$(GO) test -race -count=1 ./...

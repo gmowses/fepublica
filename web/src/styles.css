@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  html.light {
+    color-scheme: light;
+  }
+  html.light body {
+    background: #fafaf7;
+    color: #181818;
+  }
+  html.light .text-ink { color: #181818; }
+  html.light .text-ink-dim { color: #5a5a58; }
+  html.light .bg-bg { background: #fafaf7; }
+  html.light .bg-bg-soft { background: #f0f0ea; }
+  html.light .bg-bg-card { background: #ffffff; }
+  html.light .border-ink\/10 { border-color: #e0e0d6; }
+  body {
+    min-height: 100vh;
+  }
+  ::selection {
+    background: #ffd166;
+    color: #141414;
+  }
+}
+
+@layer components {
+  .container-app {
+    @apply max-w-6xl mx-auto px-4 md:px-6;
+  }
+  .btn {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-md border border-ink/10 bg-bg-card text-ink text-sm font-medium transition hover:border-accent;
+  }
+  .btn-primary {
+    @apply bg-accent text-black border-accent hover:brightness-110;
+  }
+  .card {
+    @apply bg-bg-card border border-ink/10 rounded-lg p-4;
+  }
+  .stat-k {
+    @apply font-mono text-[0.72rem] uppercase tracking-wider text-ink-dim;
+  }
+  .stat-v {
+    @apply text-2xl font-semibold tabular-nums text-ink mt-1;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-mono border border-ink/10 text-ink-dim;
+  }
+  .chip-ok {
+    @apply text-ok border-ok/30;
+  }
+  .chip-warn {
+    @apply text-accent border-accent/30;
+  }
+  .chip-danger {
+    @apply text-danger border-danger/30;
+  }
+}
+
+/* Leaflet tweaks */
+.leaflet-container {
+  background: #11161f;
+  border-radius: 0.5rem;
+}
+html.light .leaflet-container {
+  background: #f0f0ea;
+}
+.leaflet-tile-pane {
+  filter: none;
+}
+.fepublica-uf-path {
+  transition: fill-opacity 160ms ease, stroke-width 160ms ease;
+}
+.fepublica-uf-path:hover {
+  fill-opacity: 0.9;
+  stroke-width: 1.5;
+}

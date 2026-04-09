@@ -41,26 +41,36 @@ func New(s *store.Store, logger zerolog.Logger, version, baseURL string) *Server
 }
 
 // Routes returns an http.Handler with all endpoints wired.
+//
+// Layout:
+//
+//   - /api/*  — JSON HTTP API (collectors, snapshots, events, proofs, diffs)
+//   - /api/metrics — Prometheus metrics
+//   - /api/health — liveness probe
+//   - /*      — Embedded React SPA (built from web/ via `make web`) with
+//     client-side routing fallback to index.html
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
-	// HTML views (browser-friendly)
-	mux.HandleFunc("GET /{$}", s.handleIndex)
-	mux.HandleFunc("GET /view/snapshots/{id}", s.handleViewSnapshot)
-	mux.HandleFunc("GET /view/snapshots/{id}/events/{external_id}", s.handleViewEvent)
 
-	// JSON API
+	// JSON API — all under /api/ prefix.
+	mux.HandleFunc("GET /api/health", s.handleHealth)
+	mux.HandleFunc("GET /api/sources", s.handleListSources)
+	mux.HandleFunc("GET /api/snapshots", s.handleListSnapshots)
+	mux.HandleFunc("GET /api/snapshots/{id}", s.handleGetSnapshot)
+	mux.HandleFunc("GET /api/snapshots/{id}/anchors", s.handleListSnapshotAnchors)
+	mux.HandleFunc("GET /api/snapshots/{id}/events", s.handleListSnapshotEvents)
+	mux.HandleFunc("GET /api/snapshots/{id}/diff/{other_id}", s.handleDiff)
+	mux.HandleFunc("GET /api/snapshots/{id}/events/{external_id}", s.handleGetEvent)
+	mux.HandleFunc("GET /api/snapshots/{id}/events/{external_id}/proof", s.handleProof)
+	mux.Handle("GET /api/metrics", promhttp.Handler())
+
+	// Legacy unprefixed endpoints that external scripts might still depend on.
+	// These forward to the /api/* equivalents. Will be removed in v0.3.
 	mux.HandleFunc("GET /health", s.handleHealth)
-	mux.HandleFunc("GET /sources", s.handleListSources)
-	mux.HandleFunc("GET /snapshots", s.handleListSnapshots)
-	mux.HandleFunc("GET /snapshots/{id}", s.handleGetSnapshot)
-	mux.HandleFunc("GET /snapshots/{id}/anchors", s.handleListSnapshotAnchors)
-	mux.HandleFunc("GET /snapshots/{id}/events", s.handleListSnapshotEvents)
-	mux.HandleFunc("GET /snapshots/{id}/diff/{other_id}", s.handleDiff)
-	mux.HandleFunc("GET /snapshots/{id}/events/{external_id}", s.handleGetEvent)
-	mux.HandleFunc("GET /snapshots/{id}/events/{external_id}/proof", s.handleProof)
 
-	// Metrics
-	mux.Handle("GET /metrics", promhttp.Handler())
+	// SPA catch-all at root. Must be last so /api/* routes win the match.
+	mux.HandleFunc("GET /", serveSPA)
+
 	return logging(s.logger, mux)
 }
 
@@ -143,37 +153,6 @@ func (s *Server) handleGetEvent(w http.ResponseWriter, r *http.Request) {
 		"content_hash":   store.HexHash(ev.ContentHash),
 		"canonical_json": json.RawMessage(ev.CanonicalJSON),
 	})
-}
-
-// handleViewSnapshot serves the HTML page for browsing a snapshot's events.
-func (s *Server) handleViewSnapshot(w http.ResponseWriter, r *http.Request) {
-	id, err := parseID(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	snap, err := s.store.GetSnapshot(r.Context(), id)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	serveSnapshotHTML(w, snap)
-}
-
-// handleViewEvent serves the HTML page for a single event.
-func (s *Server) handleViewEvent(w http.ResponseWriter, r *http.Request) {
-	id, err := parseID(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	externalID := r.PathValue("external_id")
-	_, err = s.store.GetSnapshot(r.Context(), id)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	serveEventHTML(w, id, externalID)
 }
 
 // handleDiff returns the set difference between two snapshots of the same source.
@@ -290,75 +269,9 @@ func bytesEqual(a, b []byte) bool {
 	return true
 }
 
-// handleIndex serves the root endpoint. Browsers (Accept: text/html) get the
-// embedded HTML landing page. API clients get a JSON index with service
-// metadata, endpoint map, and a lightweight stats summary.
-func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	if wantsHTML(r) {
-		serveIndexHTML(w)
-		return
-	}
-	ctx := r.Context()
-
-	sources, _ := s.store.ListSources(ctx)
-	snapshots, _ := s.store.ListSnapshots(ctx, "", 500)
-
-	var totalEvents int
-	var latest *store.Snapshot
-	for i := range snapshots {
-		totalEvents += snapshots[i].RecordCount
-		if latest == nil || snapshots[i].CollectedAt.After(latest.CollectedAt) {
-			latest = &snapshots[i]
-		}
-	}
-
-	resp := map[string]any{
-		"service":    "Fé Pública",
-		"tagline":    "Tamper-evident archive of Brazilian public transparency data, anchored in Bitcoin via OpenTimestamps",
-		"version":    s.version,
-		"repository": "https://github.com/gmowses/fepublica",
-		"license":    "AGPL-3.0",
-		"base_url":   s.baseURL,
-		"started_at": s.started.UTC().Format(time.RFC3339),
-		"uptime":     time.Since(s.started).Round(time.Second).String(),
-		"endpoints": map[string]string{
-			"health":    "/health",
-			"sources":   "/sources",
-			"snapshots": "/snapshots",
-			"snapshot":  "/snapshots/{id}",
-			"anchors":   "/snapshots/{id}/anchors",
-			"proof":     "/snapshots/{id}/events/{external_id}/proof",
-		},
-		"stats": map[string]any{
-			"sources":        len(sources),
-			"snapshots":      len(snapshots),
-			"total_events":   totalEvents,
-			"latest_collect": latestTimestamp(latest),
-			"latest_source":  latestSource(latest),
-		},
-		"docs": map[string]string{
-			"design":       "https://github.com/gmowses/fepublica/blob/main/docs/DESIGN.md",
-			"roadmap":      "https://github.com/gmowses/fepublica/blob/main/docs/ROADMAP.md",
-			"verify_cli":   "https://github.com/gmowses/fepublica/tree/main/cmd/verify",
-			"contributing": "https://github.com/gmowses/fepublica/blob/main/CONTRIBUTING.md",
-		},
-	}
-	writeJSON(w, http.StatusOK, resp)
-}
-
-func latestTimestamp(s *store.Snapshot) any {
-	if s == nil {
-		return nil
-	}
-	return s.CollectedAt.UTC().Format(time.RFC3339)
-}
-
-func latestSource(s *store.Snapshot) any {
-	if s == nil {
-		return nil
-	}
-	return s.SourceID
-}
+// (handleIndex and the server-rendered HTML templates were removed in v0.1
+// when the embedded React SPA replaced them. The root path is now served by
+// serveSPA in spa.go; API clients should use GET /api/health for metadata.)
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{

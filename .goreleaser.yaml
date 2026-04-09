@@ -49,21 +49,34 @@ builds:
     goarch: [amd64, arm64]
 
 archives:
-  - id: default
-    ids: [collector, anchor, api, verify]
+  - id: server
+    ids: [collector, anchor, api]
     name_template: >-
-      {{ .ProjectName }}_{{ .Version }}_
+      {{ .ProjectName }}-server_{{ .Version }}_
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
-    format_overrides:
-      - goos: windows
-        format: zip
     files:
       - LICENSE
       - README.md
       - docs/**/*
+  - id: verify
+    ids: [verify]
+    name_template: >-
+      {{ .ProjectName }}-verify_{{ .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+      - docs/verification.md
 
 checksum:
   name_template: "checksums.txt"

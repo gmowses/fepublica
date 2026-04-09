@@ -84,6 +84,7 @@ services:
       args:
         TARGET: collector
     restart: unless-stopped
+    command: ["serve"]
     environment:
       <<: *common-env
       COLLECTOR_CEIS_SCHEDULE: ${COLLECTOR_CEIS_SCHEDULE:-0 4 * * *}

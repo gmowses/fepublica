@@ -1,0 +1,144 @@
+# Fé Pública — local + production-oriented compose
+#
+# Profiles:
+#   default  : postgres + api + anchor + collector
+#   dev      : adds a hot-reload setup if you want to mount source
+#   migrate  : one-shot migration runner (docker compose run --rm migrate)
+#
+# For production deployment on an existing VPS with Traefik + external proxy network,
+# see deploy/compose/docker-compose.prod.yml
+
+x-common-env: &common-env
+  POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+  POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+  POSTGRES_USER: ${POSTGRES_USER:-fepublica}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_real_deployments}
+  POSTGRES_DB: ${POSTGRES_DB:-fepublica}
+  POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-disable}
+  TRANSPARENCIA_API_KEY: ${TRANSPARENCIA_API_KEY}
+  OTS_CALENDARS: ${OTS_CALENDARS:-https://alice.btc.calendar.opentimestamps.org,https://bob.btc.calendar.opentimestamps.org}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  LOG_FORMAT: ${LOG_FORMAT:-json}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fepublica}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_real_deployments}
+      POSTGRES_DB: ${POSTGRES_DB:-fepublica}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - fepublica_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fepublica} -d ${POSTGRES_DB:-fepublica}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+
+  api:
+    build:
+      context: .
+      args:
+        TARGET: api
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      API_HOST: 0.0.0.0
+      API_PORT: "8080"
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:8080}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - fepublica_internal
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/app", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+        reservations:
+          memory: 64M
+
+  collector:
+    build:
+      context: .
+      args:
+        TARGET: collector
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      COLLECTOR_CEIS_SCHEDULE: ${COLLECTOR_CEIS_SCHEDULE:-0 4 * * *}
+      COLLECTOR_CNEP_SCHEDULE: ${COLLECTOR_CNEP_SCHEDULE:-15 4 * * *}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - fepublica_internal
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          memory: 64M
+
+  anchor:
+    build:
+      context: .
+      args:
+        TARGET: anchor
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      ANCHOR_BATCH_INTERVAL: ${ANCHOR_BATCH_INTERVAL:-6h}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - fepublica_internal
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          memory: 64M
+
+  migrate:
+    build:
+      context: .
+      args:
+        TARGET: api
+    profiles: ["migrate"]
+    environment:
+      <<: *common-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - fepublica_internal
+    command: ["migrate"]
+
+volumes:
+  postgres_data:
+
+networks:
+  fepublica_internal:
+    driver: bridge

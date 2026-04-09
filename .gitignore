@@ -1,0 +1,46 @@
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Go build
+bin/
+dist/
+*.exe
+*.test
+*.out
+coverage.*
+vendor/
+
+# Stray root-level binaries from "go build ./cmd/..." without -o
+/collector
+/anchor
+/api
+/verify
+/fepublica-verify
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+.claude/
+
+# Docker
+docker-compose.override.yml
+
+# Database
+*.sqlite
+*.sqlite3
+data/
+postgres-data/
+
+# Logs
+*.log
+logs/
+
+# Local artifacts
+tmp/
+.tmp/

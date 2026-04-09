@@ -44,12 +44,12 @@ func main() {
 		Short: "Run one collection cycle for a specific source",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if sourceFlag == "" {
-				return fmt.Errorf("--source is required (ceis, cnep)")
+				return fmt.Errorf("--source is required (ceis, cnep, pncp-contratos)")
 			}
 			return runOnce(cmd.Context(), sourceFlag)
 		},
 	}
-	runCmd.Flags().StringVar(&sourceFlag, "source", "", "source id (ceis, cnep)")
+	runCmd.Flags().StringVar(&sourceFlag, "source", "", "source id (ceis, cnep, pncp-contratos)")
 
 	serveCmd := &cobra.Command{
 		Use:   "serve",

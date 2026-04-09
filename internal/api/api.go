@@ -88,6 +88,14 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/lai/scores", s.handleListLaiScores)
 	mux.HandleFunc("GET /api/entes/{id}/lai-checks", s.handleListEnteLaiChecks)
 
+	// R1 — Contratos Explorer (rastreador de gastos)
+	mux.HandleFunc("GET /api/gastos/stats", s.handleGastosStats)
+	mux.HandleFunc("GET /api/gastos/timeseries", s.handleGastosTimeseries)
+	mux.HandleFunc("GET /api/gastos/contratos", s.handleListContratos)
+	mux.HandleFunc("GET /api/gastos/top-fornecedores", s.handleTopFornecedores)
+	mux.HandleFunc("GET /api/gastos/top-orgaos", s.handleTopOrgaos)
+	mux.HandleFunc("GET /api/gastos/fornecedores/{ni}", s.handleGetFornecedor)
+
 	mux.Handle("GET /api/metrics", promhttp.Handler())
 
 	// Legacy unprefixed endpoints that external scripts might still depend on.

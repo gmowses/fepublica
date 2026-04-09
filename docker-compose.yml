@@ -197,6 +197,27 @@ services:
         reservations:
           memory: 64M
 
+  lai-crawler:
+    build:
+      context: .
+      args:
+        TARGET: lai-crawler
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - fepublica_internal
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          memory: 128M
+
   migrate:
     build:
       context: .

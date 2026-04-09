@@ -84,6 +84,10 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/observatorio/entes-by-uf", s.handleEntesByUF)
 	mux.HandleFunc("GET /api/observatorio/changes-by-uf", s.handleChangeEventsByUF)
 
+	// Observatório M5 — LAI crawler queries
+	mux.HandleFunc("GET /api/lai/scores", s.handleListLaiScores)
+	mux.HandleFunc("GET /api/entes/{id}/lai-checks", s.handleListEnteLaiChecks)
+
 	mux.Handle("GET /api/metrics", promhttp.Handler())
 
 	// Legacy unprefixed endpoints that external scripts might still depend on.

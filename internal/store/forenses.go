@@ -33,6 +33,12 @@ const (
 )
 
 // Finding is a single suspicious pattern surfaced by a detector.
+//
+// DedupKey is the stable identity of the finding across detector runs. Two
+// findings with the same DedupKey are considered the same and merged at
+// persist time (see PersistFindings). It must be deterministic from the
+// detector's input data — typically `<type>:<entity_id>` or
+// `<type>:<orgao>:<fornecedor>`.
 type Finding struct {
 	Type     FindingType            `json:"type"`
 	Severity Severity               `json:"severity"`
@@ -41,6 +47,22 @@ type Finding struct {
 	Valor    *float64               `json:"valor,omitempty"`
 	Evidence map[string]interface{} `json:"evidence"`
 	Link     string                 `json:"link,omitempty"`
+	DedupKey string                 `json:"dedup_key,omitempty"`
+}
+
+// PersistedFinding is a Finding plus the lifecycle metadata stored in the
+// findings table. This is what feeds the atom endpoint and curation UIs.
+type PersistedFinding struct {
+	ID            int64
+	Finding       Finding
+	FirstSeenAt   time.Time
+	LastSeenAt    time.Time
+	DismissedAt   *time.Time
+	DismissedBy   string
+	DismissedNote string
+	ConfirmedAt   *time.Time
+	ConfirmedBy   string
+	NotifiedAt    *time.Time
 }
 
 // FindSancionadosContratados returns contratos onde o fornecedor aparece
@@ -103,6 +125,7 @@ func (s *Store) FindSancionadosContratados(ctx context.Context, limit int) ([]Fi
 			Title:    "Empresa sancionada com contrato público",
 			Subject:  fallback(nome, ni),
 			Valor:    valor,
+			DedupKey: fmt.Sprintf("sancionado_contratado:%d", id),
 			Evidence: map[string]interface{}{
 				"fornecedor_ni":   ni,
 				"fornecedor_nome": nome,
@@ -188,6 +211,7 @@ func (s *Store) FindConcentracaoOrgao(ctx context.Context, limit int) ([]Finding
 			Title:    "Concentração de fornecedor em um órgão",
 			Subject:  fmt.Sprintf("%s ← %s", fallback(orgaoNome, orgaoCNPJ), fallback(fornNome, fornNi)),
 			Valor:    &v,
+			DedupKey: fmt.Sprintf("concentracao_orgao:%s:%s", orgaoCNPJ, fornNi),
 			Evidence: map[string]interface{}{
 				"orgao":             fallback(orgaoNome, orgaoCNPJ),
 				"orgao_cnpj":        orgaoCNPJ,
@@ -267,6 +291,7 @@ func (s *Store) FindValorOutliers(ctx context.Context, limit int) ([]Finding, er
 			Title:    "Contrato muito acima da mediana do órgão",
 			Subject:  fornNome,
 			Valor:    &v,
+			DedupKey: fmt.Sprintf("valor_outlier:%d", id),
 			Evidence: map[string]interface{}{
 				"orgao":         orgao,
 				"fornecedor":    fornNome,
@@ -335,6 +360,7 @@ func (s *Store) FindCPGFAltoValor(ctx context.Context, limit int) ([]Finding, er
 			Title:    "Transação CPGF de valor elevado",
 			Subject:  fallback(portador, "?"),
 			Valor:    valor,
+			DedupKey: fmt.Sprintf("cpgf_alto:%d", id),
 			Evidence: map[string]interface{}{
 				"portador":        portador,
 				"portador_cpf":    cpf,
@@ -399,6 +425,7 @@ func (s *Store) FindCPGFEstabOpaco(ctx context.Context, limit int) ([]Finding, e
 			Title:    "Gastos CPGF em estabelecimento sem identificação",
 			Subject:  fallback(portador, "?"),
 			Valor:    &v,
+			DedupKey: fmt.Sprintf("cpgf_estab_opaco:%s:%s", cpf, orgao),
 			Evidence: map[string]interface{}{
 				"portador":     portador,
 				"portador_cpf": cpf,

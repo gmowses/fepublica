@@ -109,6 +109,10 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/forenses/outliers", s.handleForensesOutliers)
 	mux.HandleFunc("GET /api/forenses/cpgf-alto", s.handleForensesCPGFAlto)
 	mux.HandleFunc("GET /api/forenses/cpgf-opaco", s.handleForensesCPGFOpaco)
+	// R3.A — Persisted findings + curation + atom feed
+	mux.HandleFunc("GET /api/forenses/counts", s.handleForensesCounts)
+	mux.HandleFunc("GET /api/forenses/findings", s.handleForensesPersisted)
+	mux.HandleFunc("GET /api/feeds/forenses/atom", s.handleForensesAtom)
 
 	mux.Handle("GET /api/metrics", promhttp.Handler())
 

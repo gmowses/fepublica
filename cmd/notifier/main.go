@@ -57,16 +57,24 @@ func run(ctx context.Context, once bool, interval time.Duration) error {
 	}
 	defer st.Close()
 
+	tg := notify.NewTelegramChannel(cfg.Telegram.BotToken, cfg.Telegram.ChannelID)
+	ma := notify.NewMastodonChannel(cfg.Mastodon.InstanceURL, cfg.Mastodon.AccessToken)
 	channels := []notify.Channel{
 		notify.NewRSSChannel(),
-		notify.NewTelegramChannel(cfg.Telegram.BotToken, cfg.Telegram.ChannelID),
-		notify.NewMastodonChannel(cfg.Mastodon.InstanceURL, cfg.Mastodon.AccessToken),
+		tg,
+		ma,
 	}
 
 	d := notify.New(st, log, channels...)
+	fd := notify.NewFindingsDispatcher(st, tg, ma, cfg.API.BaseURL)
+
 	if once {
+		if _, err := fd.RunOnce(ctx); err != nil {
+			log.Error().Err(err).Msg("notifier: findings pass failed")
+		}
 		return d.RunOnce(ctx, 0)
 	}
+	go fd.Loop(ctx, interval)
 	d.Loop(ctx, interval)
 	return nil
 }

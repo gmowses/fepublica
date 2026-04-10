@@ -260,6 +260,29 @@ services:
         reservations:
           memory: 64M
 
+  forenses-runner:
+    build:
+      context: .
+      args:
+        TARGET: forenses-runner
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      FORENSES_INTERVAL: ${FORENSES_INTERVAL:-30m}
+    command: ["--interval=30m"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - fepublica_internal
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          memory: 64M
+
   migrate:
     build:
       context: .

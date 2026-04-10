@@ -114,6 +114,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/forenses/findings", s.handleForensesPersisted)
 	mux.HandleFunc("GET /api/feeds/forenses/atom", s.handleForensesAtom)
 
+	// R6 — CEAP (Câmara dos Deputados — cota parlamentar)
+	mux.HandleFunc("GET /api/gastos/ceap/stats", s.handleCEAPStats)
+
 	mux.Handle("GET /api/metrics", promhttp.Handler())
 
 	// Legacy unprefixed endpoints that external scripts might still depend on.

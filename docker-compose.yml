@@ -260,6 +260,27 @@ services:
         reservations:
           memory: 64M
 
+  ceap-indexer:
+    build:
+      context: .
+      args:
+        TARGET: ceap-indexer
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - fepublica_internal
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          memory: 64M
+
   forenses-runner:
     build:
       context: .

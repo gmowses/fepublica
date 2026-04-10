@@ -63,10 +63,17 @@ type pageResponse struct {
 const maxPages = 200
 
 // recordShape is the minimal subset we need to extract an external id.
-// PNCP uses "numeroControlePncpCompra" as the stable identifier for a
-// contract in the consulta v1 API (format: "<cnpj>-<seq>-<num>/<ano>").
+//
+// PNCP consulta v1 returns contratos with two distinct "numero controle"
+// fields: `numeroControlePNCP` (the stable ID of THIS contrato, format
+// "<cnpj>-<type>-<num>/<ano>") and `numeroControlePncpCompra` (the ID of
+// the parent compra that originated the contrato, which is NOT unique per
+// contrato — many contratos share the same compra). We prefer the former.
 type recordShape struct {
+	NumeroControlePNCP       string `json:"numeroControlePNCP"`
 	NumeroControlePncpCompra string `json:"numeroControlePncpCompra"`
+	SequencialContrato       int    `json:"sequencialContrato"`
+	AnoContrato              int    `json:"anoContrato"`
 	NiFornecedor             string `json:"niFornecedor"`
 	DataAssinatura           string `json:"dataAssinatura"`
 	OrgaoEntidade            struct {
@@ -162,9 +169,16 @@ func Fetch(ctx context.Context, _ *transparencia.Client) (*transparencia.FetchRe
 			if err := json.Unmarshal(item, &meta); err != nil {
 				return nil, fmt.Errorf("pncp: record %d page %d: %w", i, page, err)
 			}
-			externalID := meta.NumeroControlePncpCompra
+			// Prefer numeroControlePNCP (unique per contrato). Fall back to
+			// composing from the parent compra plus the sequencial do contrato,
+			// which together are unique even when the contrato-level ID is
+			// missing on older records.
+			externalID := meta.NumeroControlePNCP
+			if externalID == "" && meta.NumeroControlePncpCompra != "" && meta.SequencialContrato > 0 {
+				externalID = fmt.Sprintf("%s-seq%d", meta.NumeroControlePncpCompra, meta.SequencialContrato)
+			}
 			if externalID == "" {
-				// Fallback: compose from orgao + supplier + signature date.
+				// Last-resort fallback: orgao + supplier + signature date.
 				if meta.OrgaoEntidade.CNPJ != "" && meta.NiFornecedor != "" && meta.DataAssinatura != "" {
 					externalID = fmt.Sprintf("%s-%s-%s", meta.OrgaoEntidade.CNPJ, meta.NiFornecedor, meta.DataAssinatura)
 				} else {

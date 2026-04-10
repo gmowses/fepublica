@@ -9,6 +9,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -313,8 +314,42 @@ func (s *Store) FindValorOutliers(ctx context.Context, limit int) ([]Finding, er
 	return out, rows.Err()
 }
 
+// isCPDCContext detecta se uma transação CPGF é na verdade CPDC — Cartão
+// de Pagamento de Defesa Civil — uma modalidade regulamentar (Lei 12.340/
+// 2010 + Decreto 7.257/2010) usada exclusivamente em ações de resposta a
+// desastres em municípios com situação de emergência ou calamidade pública
+// reconhecida pela União. Diferente do CPGF normal, o CPDC NÃO tem teto
+// por transação porque opera execução emergencial de recursos transferidos
+// (cestas básicas, água, kits de limpeza, destinação de resíduos pós-
+// enchente, etc) — volume e velocidade incompatíveis com licitação ordinária.
+//
+// Quando a unidade ou o órgão é Defesa Civil, a heurística "valor alto =
+// anomalia" gera falso positivo. O alerta útil neste caso não é "isso é
+// esquisito" — é "isso é CPDC, então cheque o procedimento de emergência".
+func isCPDCContext(orgao, unidade string) bool {
+	for _, hint := range []string{
+		"defesa civil", "protecao e defesa civil", "proteção e defesa civil",
+		"sedec", "ministerio da integracao", "ministério da integração",
+	} {
+		if containsFold(orgao, hint) || containsFold(unidade, hint) {
+			return true
+		}
+	}
+	return false
+}
+
+// containsFold é uma versão case-insensitive de strings.Contains que evita
+// importar strings só pra isso (já estão em outros lugares mas não aqui).
+func containsFold(s, substr string) bool {
+	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
+}
+
 // FindCPGFAltoValor returns CPGF transações com valor único > R$ 10.000.
-// Severity: medium para >10k, high para >50k.
+//
+// Severity: normal CPGF (medium para >10k, high para >50k). Quando a
+// unidade é Defesa Civil (CPDC — exceção regulamentar onde transações
+// altas são esperadas para emergências), a severidade é rebaixada e o
+// explanation é reescrito para apontar o procedimento de checagem certo.
 func (s *Store) FindCPGFAltoValor(ctx context.Context, limit int) ([]Finding, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
@@ -359,10 +394,35 @@ func (s *Store) FindCPGFAltoValor(ctx context.Context, limit int) ([]Finding, er
 		if data != nil {
 			dataStr = data.Format("2006-01-02")
 		}
+
+		title := "Transação CPGF de valor elevado"
+		explanation := "Transações únicas de valor alto no cartão corporativo são raras e merecem checagem com a finalidade declarada."
+		modalidade := "CPGF"
+
+		// CPDC exception: high values are expected for emergency response.
+		if isCPDCContext(orgao, unidade) {
+			modalidade = "CPDC (Defesa Civil)"
+			title = "Transação CPDC alta — verificar procedimento emergencial"
+			// Rebaixa severidade: o flag estatístico continua, mas o caso
+			// é regulamentar. Não suba pra high mesmo se valor enorme.
+			if sev == SeverityHigh {
+				sev = SeverityMedium
+			}
+			explanation = "CPDC — Cartão de Pagamento de Defesa Civil (Lei 12.340/2010, Decreto 7.257/2010). " +
+				"Não tem teto por transação porque executa recursos emergenciais de resposta a desastres. " +
+				"Valores altos são ESPERADOS, não anomalia. Para auditar, verifique: " +
+				"(1) portaria federal de reconhecimento de situação de emergência/calamidade vigente na data; " +
+				"(2) pesquisa simplificada de preços nos autos (mín. 3 cotações exigidas pela IN Sedec); " +
+				"(3) prestação de contas no S2ID com NF e comprovação de entrega; " +
+				"(4) competência delegada do portador por portaria publicada; " +
+				"(5) situação cadastral do fornecedor (SICAF, CEIS/CNEP, CND) na data; " +
+				"(6) coerência físico-financeira (R$ vs quantitativo plausível para o porte do desastre)."
+		}
+
 		f := Finding{
 			Type:     FindingCPGFAlto,
 			Severity: sev,
-			Title:    "Transação CPGF de valor elevado",
+			Title:    title,
 			Subject:  fallback(portador, "?"),
 			Valor:    valor,
 			DedupKey: fmt.Sprintf("cpgf_alto:%d", id),
@@ -374,7 +434,8 @@ func (s *Store) FindCPGFAltoValor(ctx context.Context, limit int) ([]Finding, er
 				"orgao":           orgao,
 				"unidade":         unidade,
 				"data":            dataStr,
-				"explanation":     "Transações únicas de valor alto no cartão corporativo são raras e merecem checagem com a finalidade declarada.",
+				"modalidade":      modalidade,
+				"explanation":     explanation,
 			},
 		}
 		_ = id

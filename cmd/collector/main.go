@@ -24,6 +24,7 @@ import (
 	"github.com/gmowses/fepublica/internal/logging"
 	"github.com/gmowses/fepublica/internal/store"
 	"github.com/gmowses/fepublica/internal/transparencia"
+	"github.com/gmowses/fepublica/internal/transparencia/camara"
 	"github.com/gmowses/fepublica/internal/transparencia/cartoes"
 	"github.com/gmowses/fepublica/internal/transparencia/ceis"
 	"github.com/gmowses/fepublica/internal/transparencia/cnep"
@@ -165,8 +166,10 @@ func resolveFetcher(sourceID string) (collector.Fetcher, error) {
 		return pncp.Fetch, nil
 	case cartoes.SourceID:
 		return cartoes.Fetch, nil
+	case camara.SourceID:
+		return camara.Fetch, nil
 	default:
-		return nil, fmt.Errorf("unknown source %q (supported: ceis, cnep, pncp-contratos, cartoes-cpgf)", sourceID)
+		return nil, fmt.Errorf("unknown source %q (supported: ceis, cnep, pncp-contratos, cartoes-cpgf, camara-ceap)", sourceID)
 	}
 }
 

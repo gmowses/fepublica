@@ -99,19 +99,35 @@ func (s *Store) ListPersistedFindings(ctx context.Context, fType string, include
 	var out []PersistedFinding
 	for rows.Next() {
 		var (
-			pf      PersistedFinding
-			fType   string
-			sev     string
-			ev      []byte
+			pf            PersistedFinding
+			fType         string
+			sev           string
+			ev            []byte
+			link          *string
+			dismissedBy   *string
+			dismissedNote *string
+			confirmedBy   *string
 		)
 		if err := rows.Scan(&pf.ID, &fType, &pf.Finding.DedupKey, &sev,
-			&pf.Finding.Title, &pf.Finding.Subject, &pf.Finding.Valor, &ev, &pf.Finding.Link,
-			&pf.FirstSeenAt, &pf.LastSeenAt, &pf.DismissedAt, &pf.DismissedBy, &pf.DismissedNote,
-			&pf.ConfirmedAt, &pf.ConfirmedBy, &pf.NotifiedAt); err != nil {
+			&pf.Finding.Title, &pf.Finding.Subject, &pf.Finding.Valor, &ev, &link,
+			&pf.FirstSeenAt, &pf.LastSeenAt, &pf.DismissedAt, &dismissedBy, &dismissedNote,
+			&pf.ConfirmedAt, &confirmedBy, &pf.NotifiedAt); err != nil {
 			return nil, err
 		}
 		pf.Finding.Type = FindingType(fType)
 		pf.Finding.Severity = Severity(sev)
+		if link != nil {
+			pf.Finding.Link = *link
+		}
+		if dismissedBy != nil {
+			pf.DismissedBy = *dismissedBy
+		}
+		if dismissedNote != nil {
+			pf.DismissedNote = *dismissedNote
+		}
+		if confirmedBy != nil {
+			pf.ConfirmedBy = *confirmedBy
+		}
 		if len(ev) > 0 {
 			_ = json.Unmarshal(ev, &pf.Finding.Evidence)
 		}
@@ -145,14 +161,18 @@ func (s *Store) ListPendingNotificationFindings(ctx context.Context, limit int) 
 			fType string
 			sev   string
 			ev    []byte
+			link  *string
 		)
 		if err := rows.Scan(&pf.ID, &fType, &pf.Finding.DedupKey, &sev,
-			&pf.Finding.Title, &pf.Finding.Subject, &pf.Finding.Valor, &ev, &pf.Finding.Link,
+			&pf.Finding.Title, &pf.Finding.Subject, &pf.Finding.Valor, &ev, &link,
 			&pf.FirstSeenAt, &pf.LastSeenAt); err != nil {
 			return nil, err
 		}
 		pf.Finding.Type = FindingType(fType)
 		pf.Finding.Severity = Severity(sev)
+		if link != nil {
+			pf.Finding.Link = *link
+		}
 		if len(ev) > 0 {
 			_ = json.Unmarshal(ev, &pf.Finding.Evidence)
 		}

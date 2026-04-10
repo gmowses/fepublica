@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"time"
 )
 
 // FindMesmoDiaMesmoOrgao detecta órgãos que assinam ≥5 contratos no mesmo
@@ -40,17 +41,14 @@ func (s *Store) FindMesmoDiaMesmoOrgao(ctx context.Context, limit int) ([]Findin
 	for rows.Next() {
 		var (
 			orgaoCNPJ, orgaoNome string
-			data                 *struct{}
+			data                 time.Time
 			qtd                  int64
 			total                float64
 		)
-		// data_assinatura is DATE; pgx returns time.Time but we ignore type for the dedup
-		var dataStr string
-		if err := rows.Scan(&orgaoCNPJ, &orgaoNome, &dataStr, &qtd, &total); err != nil {
-			// Fall back to manual scan if the type is wrong
-			_ = data
+		if err := rows.Scan(&orgaoCNPJ, &orgaoNome, &data, &qtd, &total); err != nil {
 			return nil, fmt.Errorf("forenses: mesmo_dia scan: %w", err)
 		}
+		dataStr := data.Format("2006-01-02")
 		sev := SeverityMedium
 		if total >= 1_000_000 {
 			sev = SeverityHigh

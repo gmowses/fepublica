@@ -57,11 +57,16 @@ func run(ctx context.Context, once bool, interval time.Duration) error {
 		var all []store.Finding
 
 		for name, fn := range map[string]func(context.Context, int) ([]store.Finding, error){
-			"sancionados":  st.FindSancionadosContratados,
-			"concentracao": st.FindConcentracaoOrgao,
-			"outliers":     st.FindValorOutliers,
-			"cpgf_alto":    st.FindCPGFAltoValor,
-			"cpgf_opaco":   st.FindCPGFEstabOpaco,
+			"sancionados":          st.FindSancionadosContratados,
+			"concentracao":         st.FindConcentracaoOrgao,
+			"outliers":             st.FindValorOutliers,
+			"cpgf_alto":            st.FindCPGFAltoValor,
+			"cpgf_opaco":           st.FindCPGFEstabOpaco,
+			"mesmo_dia":            st.FindMesmoDiaMesmoOrgao,
+			"valores_redondos":     st.FindValoresRedondos,
+			"fornecedor_multi_uf":  st.FindFornecedorMultiUF,
+			"cpgf_concentrado_mes": st.FindCPGFConcentradoNoMes,
+			"valor_crescimento":    st.FindValorCrescimentoGeometrico,
 		} {
 			start := time.Now()
 			rows, err := fn(ctx, 200)

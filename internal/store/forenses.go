@@ -30,6 +30,11 @@ const (
 	FindingValorOutlier         FindingType = "valor_outlier"
 	FindingCPGFAlto             FindingType = "cpgf_alto"
 	FindingCPGFEstabOpaco       FindingType = "cpgf_estab_opaco"
+	FindingMesmoDiaOrgao        FindingType = "mesmo_dia_orgao"
+	FindingValorRedondo         FindingType = "valor_redondo"
+	FindingFornecedorMultiUF    FindingType = "fornecedor_multi_uf"
+	FindingCPGFConcentradoMes   FindingType = "cpgf_concentrado_mes"
+	FindingValorCrescimento     FindingType = "valor_crescimento"
 )
 
 // Finding is a single suspicious pattern surfaced by a detector.
@@ -439,18 +444,72 @@ func (s *Store) FindCPGFEstabOpaco(ctx context.Context, limit int) ([]Finding, e
 	return out, rows.Err()
 }
 
-// ForensesSummary é o agregado para a página /forenses.
+// ForensesSummary é o agregado para a página /forenses. Os contadores
+// vêm da tabela findings (persisted), agrupados por type. Detectores que
+// nunca rodaram retornam 0.
 type ForensesSummary struct {
-	Sancionados   int64 `json:"sancionados_contratados"`
-	Concentracoes int64 `json:"concentracoes_orgao"`
-	Outliers      int64 `json:"valor_outliers"`
-	CPGFAlto      int64 `json:"cpgf_alto"`
-	CPGFOpaco     int64 `json:"cpgf_opaco"`
+	Sancionados        int64 `json:"sancionados_contratados"`
+	Concentracoes      int64 `json:"concentracoes_orgao"`
+	Outliers           int64 `json:"valor_outliers"`
+	CPGFAlto           int64 `json:"cpgf_alto"`
+	CPGFOpaco          int64 `json:"cpgf_opaco"`
+	MesmoDia           int64 `json:"mesmo_dia_orgao"`
+	ValorRedondo       int64 `json:"valor_redondo"`
+	FornecedorMultiUF  int64 `json:"fornecedor_multi_uf"`
+	CPGFConcentradoMes int64 `json:"cpgf_concentrado_mes"`
+	ValorCrescimento   int64 `json:"valor_crescimento"`
 }
 
-// GetForensesSummary returns counts for each detector. Cheap for the
-// dashboard top section. Each detector reuses its own query semantics.
+// GetForensesSummary returns counts for each detector. Now that findings
+// are persisted by forenses-runner, this is just a GROUP BY on the
+// findings table — much cheaper than re-running the SQL detectors.
 func (s *Store) GetForensesSummary(ctx context.Context) (*ForensesSummary, error) {
+	sum := &ForensesSummary{}
+	rows, err := s.pool.Query(ctx, `
+		SELECT finding_type, COUNT(*)
+		FROM findings
+		WHERE dismissed_at IS NULL
+		GROUP BY finding_type
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("forenses: summary: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var t string
+		var n int64
+		if err := rows.Scan(&t, &n); err != nil {
+			return nil, err
+		}
+		switch FindingType(t) {
+		case FindingSancionadoContratado:
+			sum.Sancionados = n
+		case FindingConcentracaoOrgao:
+			sum.Concentracoes = n
+		case FindingValorOutlier:
+			sum.Outliers = n
+		case FindingCPGFAlto:
+			sum.CPGFAlto = n
+		case FindingCPGFEstabOpaco:
+			sum.CPGFOpaco = n
+		case FindingMesmoDiaOrgao:
+			sum.MesmoDia = n
+		case FindingValorRedondo:
+			sum.ValorRedondo = n
+		case FindingFornecedorMultiUF:
+			sum.FornecedorMultiUF = n
+		case FindingCPGFConcentradoMes:
+			sum.CPGFConcentradoMes = n
+		case FindingValorCrescimento:
+			sum.ValorCrescimento = n
+		}
+	}
+	return sum, rows.Err()
+}
+
+// GetForensesSummaryLive runs the original SQL detectors directly. Kept
+// for the case where the persisted findings are not yet populated. Heavy.
+func (s *Store) GetForensesSummaryLive(ctx context.Context) (*ForensesSummary, error) {
 	var sum ForensesSummary
 	err := s.pool.QueryRow(ctx, `
 		WITH sancionados AS (

@@ -44,11 +44,29 @@ type Finding struct {
 
 // FindSancionadosContratados returns contratos onde o fornecedor aparece
 // em CEIS ou CNEP. Severity: high.
+//
+// Optimization: a naive ILIKE on canonical_json::text would scan ~25k events
+// per contrato (40M comparisons total). Instead we precompute a small set
+// of sancionado CNPJs (digits-only) once via a CTE, then do an index-eligible
+// equality join against contratos.fornecedor_ni.
 func (s *Store) FindSancionadosContratados(ctx context.Context, limit int) ([]Finding, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
 	rows, err := s.pool.Query(ctx, `
+		WITH sancionados AS (
+			SELECT DISTINCT
+				regexp_replace(
+					COALESCE(
+						canonical_json->'pessoa'->>'cnpjFormatado',
+						canonical_json->'pessoa'->>'cpfFormatado',
+						''
+					),
+					'[^0-9]', '', 'g'
+				) AS ni
+			FROM events
+			WHERE source_id IN ('ceis', 'cnep')
+		)
 		SELECT
 			c.fornecedor_ni,
 			COALESCE(c.fornecedor_nome, ''),
@@ -57,13 +75,9 @@ func (s *Store) FindSancionadosContratados(ctx context.Context, limit int) ([]Fi
 			c.objeto_contrato,
 			c.id
 		FROM contratos c
+		JOIN sancionados s ON s.ni = c.fornecedor_ni
 		WHERE c.fornecedor_ni IS NOT NULL
 		  AND c.fornecedor_ni <> ''
-		  AND EXISTS (
-		    SELECT 1 FROM events e
-		    WHERE e.source_id IN ('ceis', 'cnep')
-		      AND e.canonical_json::text ILIKE '%' || c.fornecedor_ni || '%'
-		  )
 		ORDER BY c.valor_global DESC NULLS LAST
 		LIMIT $1
 	`, limit)
@@ -405,12 +419,17 @@ type ForensesSummary struct {
 func (s *Store) GetForensesSummary(ctx context.Context) (*ForensesSummary, error) {
 	var sum ForensesSummary
 	err := s.pool.QueryRow(ctx, `
+		WITH sancionados AS (
+			SELECT DISTINCT regexp_replace(
+				COALESCE(canonical_json->'pessoa'->>'cnpjFormatado',
+				         canonical_json->'pessoa'->>'cpfFormatado', ''),
+				'[^0-9]', '', 'g') AS ni
+			FROM events WHERE source_id IN ('ceis','cnep')
+		)
 		SELECT
 			(SELECT COUNT(*) FROM contratos c
-			 WHERE c.fornecedor_ni IS NOT NULL AND c.fornecedor_ni <> ''
-			   AND EXISTS (SELECT 1 FROM events e
-			               WHERE e.source_id IN ('ceis','cnep')
-			                 AND e.canonical_json::text ILIKE '%' || c.fornecedor_ni || '%')),
+			 JOIN sancionados s ON s.ni = c.fornecedor_ni
+			 WHERE c.fornecedor_ni IS NOT NULL AND c.fornecedor_ni <> ''),
 			(SELECT COUNT(*) FROM (
 				WITH orgao_totals AS (
 					SELECT orgao_cnpj, SUM(valor_global) AS t FROM contratos

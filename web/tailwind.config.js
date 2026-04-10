@@ -17,6 +17,7 @@ export default {
         accent: "#ffd166",
         ok: "#4cc9a3",
         danger: "#ef476f",
+        warn: "#f8961e",
       },
       fontFamily: {
         sans: [

@@ -102,6 +102,14 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/gastos/cartoes/top-portadores", s.handleTopPortadores)
 	mux.HandleFunc("GET /api/gastos/cartoes/top-orgaos", s.handleTopOrgaosCartoes)
 
+	// R3 — Forenses (detectores de padrões suspeitos)
+	mux.HandleFunc("GET /api/forenses/summary", s.handleForensesSummary)
+	mux.HandleFunc("GET /api/forenses/sancionados", s.handleForensesSancionados)
+	mux.HandleFunc("GET /api/forenses/concentracao", s.handleForensesConcentracao)
+	mux.HandleFunc("GET /api/forenses/outliers", s.handleForensesOutliers)
+	mux.HandleFunc("GET /api/forenses/cpgf-alto", s.handleForensesCPGFAlto)
+	mux.HandleFunc("GET /api/forenses/cpgf-opaco", s.handleForensesCPGFOpaco)
+
 	mux.Handle("GET /api/metrics", promhttp.Handler())
 
 	// Legacy unprefixed endpoints that external scripts might still depend on.

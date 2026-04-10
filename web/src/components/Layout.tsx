@@ -36,6 +36,7 @@ function Header() {
         <nav className="flex items-center gap-1 text-sm">
           <NavItem to="/">Início</NavItem>
           <NavItem to="/gastos">Gastos</NavItem>
+          <NavItem to="/forenses">Forenses</NavItem>
           <NavItem to="/observatorio">Observatório</NavItem>
           <NavItem to="/entes">Entes</NavItem>
           <NavItem to="/recent">Recentes</NavItem>

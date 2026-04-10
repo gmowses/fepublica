@@ -13,6 +13,7 @@ import { Entes } from "./pages/Entes";
 import { EnteDetail } from "./pages/EnteDetail";
 import { Gastos } from "./pages/Gastos";
 import { Fornecedor } from "./pages/Fornecedor";
+import { Forenses } from "./pages/Forenses";
 
 export default function App() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="/entes/:id" element={<EnteDetail />} />
         <Route path="/gastos" element={<Gastos />} />
         <Route path="/gastos/fornecedores/:ni" element={<Fornecedor />} />
+        <Route path="/forenses" element={<Forenses />} />
         <Route path="/about" element={<About />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

@@ -67,6 +67,10 @@ func run(ctx context.Context, once bool, interval time.Duration) error {
 			"fornecedor_multi_uf":  st.FindFornecedorMultiUF,
 			"cpgf_concentrado_mes": st.FindCPGFConcentradoNoMes,
 			"valor_crescimento":    st.FindValorCrescimentoGeometrico,
+			// Cross-source detectors (R6)
+			"ceap_sancionado":      st.FindCEAPSancionados,
+			"ceap_concentracao":    st.FindCEAPConcentracao,
+			"fornecedor_duplo":     st.FindFornecedorDuplo,
 		} {
 			start := time.Now()
 			rows, err := fn(ctx, 200)

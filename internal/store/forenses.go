@@ -9,6 +9,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 // Severity classifies a finding's confidence/impact.
@@ -314,7 +315,7 @@ func (s *Store) FindCPGFAltoValor(ctx context.Context, limit int) ([]Finding, er
 		var (
 			id                                                    int64
 			portador, cpf, estab, estabCNPJ, orgao, unidade       string
-			data                                                  *string
+			data                                                  *time.Time
 			valor                                                 *float64
 		)
 		if err := rows.Scan(&id, &portador, &cpf, &estab, &estabCNPJ, &orgao, &unidade, &data, &valor); err != nil {
@@ -324,6 +325,10 @@ func (s *Store) FindCPGFAltoValor(ctx context.Context, limit int) ([]Finding, er
 		if valor != nil && *valor >= 50000 {
 			sev = SeverityHigh
 		}
+		var dataStr string
+		if data != nil {
+			dataStr = data.Format("2006-01-02")
+		}
 		f := Finding{
 			Type:     FindingCPGFAlto,
 			Severity: sev,
@@ -331,15 +336,17 @@ func (s *Store) FindCPGFAltoValor(ctx context.Context, limit int) ([]Finding, er
 			Subject:  fallback(portador, "?"),
 			Valor:    valor,
 			Evidence: map[string]interface{}{
-				"portador":      portador,
-				"portador_cpf":  cpf,
+				"portador":        portador,
+				"portador_cpf":    cpf,
 				"estabelecimento": estab,
-				"estab_cnpj":    estabCNPJ,
-				"orgao":         orgao,
-				"unidade":       unidade,
-				"explanation":   "Transações únicas de valor alto no cartão corporativo são raras e merecem checagem com a finalidade declarada.",
+				"estab_cnpj":      estabCNPJ,
+				"orgao":           orgao,
+				"unidade":         unidade,
+				"data":            dataStr,
+				"explanation":     "Transações únicas de valor alto no cartão corporativo são raras e merecem checagem com a finalidade declarada.",
 			},
 		}
+		_ = id
 		out = append(out, f)
 	}
 	return out, rows.Err()

@@ -71,9 +71,10 @@ type OTSConfig struct {
 }
 
 type CollectorConfig struct {
-	CEISSchedule string
-	CNEPSchedule string
-	PNCPSchedule string
+	CEISSchedule    string
+	CNEPSchedule    string
+	PNCPSchedule    string
+	CartoesSchedule string
 }
 
 type AnchorConfig struct {
@@ -112,9 +113,10 @@ func Load() (*Config, error) {
 				"https://alice.btc.calendar.opentimestamps.org,https://bob.btc.calendar.opentimestamps.org")),
 		},
 		Collector: CollectorConfig{
-			CEISSchedule: getenv("COLLECTOR_CEIS_SCHEDULE", "0 4 * * *"),
-			CNEPSchedule: getenv("COLLECTOR_CNEP_SCHEDULE", "15 4 * * *"),
-			PNCPSchedule: getenv("COLLECTOR_PNCP_SCHEDULE", "30 4 * * *"),
+			CEISSchedule:    getenv("COLLECTOR_CEIS_SCHEDULE", "0 4 * * *"),
+			CNEPSchedule:    getenv("COLLECTOR_CNEP_SCHEDULE", "15 4 * * *"),
+			PNCPSchedule:    getenv("COLLECTOR_PNCP_SCHEDULE", "30 4 * * *"),
+			CartoesSchedule: getenv("COLLECTOR_CARTOES_SCHEDULE", "45 4 5 * *"),
 		},
 		Anchor: AnchorConfig{
 			BatchInterval: getenvDuration("ANCHOR_BATCH_INTERVAL", 6*time.Hour),

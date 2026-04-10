@@ -24,6 +24,7 @@ import (
 	"github.com/gmowses/fepublica/internal/logging"
 	"github.com/gmowses/fepublica/internal/store"
 	"github.com/gmowses/fepublica/internal/transparencia"
+	"github.com/gmowses/fepublica/internal/transparencia/cartoes"
 	"github.com/gmowses/fepublica/internal/transparencia/ceis"
 	"github.com/gmowses/fepublica/internal/transparencia/cnep"
 	"github.com/gmowses/fepublica/internal/transparencia/pncp"
@@ -132,11 +133,19 @@ func serve(ctx context.Context) error {
 	}); err != nil {
 		return fmt.Errorf("schedule pncp: %w", err)
 	}
+	if _, err := sched.AddFunc(cfg.Collector.CartoesSchedule, func() {
+		if err := c.RunOnce(ctx, cartoes.SourceID, cartoes.Fetch); err != nil {
+			log.Error().Err(err).Str("source", cartoes.SourceID).Msg("scheduled run failed")
+		}
+	}); err != nil {
+		return fmt.Errorf("schedule cartoes: %w", err)
+	}
 
 	log.Info().
 		Str("ceis_schedule", cfg.Collector.CEISSchedule).
 		Str("cnep_schedule", cfg.Collector.CNEPSchedule).
 		Str("pncp_schedule", cfg.Collector.PNCPSchedule).
+		Str("cartoes_schedule", cfg.Collector.CartoesSchedule).
 		Msg("collector: scheduler started")
 
 	sched.Start()
@@ -154,8 +163,10 @@ func resolveFetcher(sourceID string) (collector.Fetcher, error) {
 		return cnep.Fetch, nil
 	case pncp.SourceID:
 		return pncp.Fetch, nil
+	case cartoes.SourceID:
+		return cartoes.Fetch, nil
 	default:
-		return nil, fmt.Errorf("unknown source %q (supported: ceis, cnep, pncp-contratos)", sourceID)
+		return nil, fmt.Errorf("unknown source %q (supported: ceis, cnep, pncp-contratos, cartoes-cpgf)", sourceID)
 	}
 }
 

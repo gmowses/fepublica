@@ -8,9 +8,28 @@ import {
   FileSearch,
   Shield,
   Zap,
+  Wallet,
+  Search,
+  AlertTriangle,
+  ArrowRight,
 } from "lucide-react";
 import { BrazilMap } from "../components/BrazilMap";
 import { SnapshotsChart } from "../components/SnapshotsChart";
+
+interface GastosStats {
+  total_contratos: number;
+  valor_total_global: number;
+  orgaos_unicos: number;
+  fornecedores_unicos: number;
+}
+
+function formatBRLCompact(n?: number): string {
+  if (n == null) return "—";
+  if (n >= 1e9) return "R$ " + (n / 1e9).toFixed(1).replace(".", ",") + " bi";
+  if (n >= 1e6) return "R$ " + (n / 1e6).toFixed(1).replace(".", ",") + " mi";
+  if (n >= 1e3) return "R$ " + (n / 1e3).toFixed(0) + " mil";
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+}
 
 export function Landing() {
   const sourcesQ = useQuery({ queryKey: ["sources"], queryFn: api.sources });
@@ -23,27 +42,112 @@ export function Landing() {
     queryFn: api.health,
     refetchInterval: 60_000,
   });
+  const gastosQ = useQuery({
+    queryKey: ["gastos-stats"],
+    queryFn: () => fetch("/api/gastos/stats").then((r) => r.json()) as Promise<GastosStats>,
+  });
 
   const sources = sourcesQ.data?.sources ?? [];
   const snapshots = snapsQ.data?.snapshots ?? [];
   const totalEvents = snapshots.reduce((acc, s) => acc + s.record_count, 0);
   const totalAnchored = snapshots.filter((s) => !!s.merkle_root).length;
   const latest = snapshots[0];
+  const gastos = gastosQ.data;
 
   return (
     <div>
-      {/* Hero */}
+      {/* Hero — citizen-first */}
       <section className="container-app pt-10 md:pt-16 pb-8">
         <div className="text-[0.72rem] font-mono uppercase tracking-widest text-accent mb-3">
           Fé Pública · alpha
         </div>
         <h1 className="text-3xl md:text-5xl font-bold leading-[1.1] tracking-tight max-w-4xl">
-          Dados públicos brasileiros,
-          <br className="hidden sm:block" /> verificáveis criptograficamente.
+          O que o governo brasileiro está
+          <br className="hidden sm:block" /> fazendo com o seu dinheiro.
         </h1>
         <p className="mt-4 text-lg text-ink-dim max-w-3xl">
-          Coletamos dados de portais oficiais, organizamos cada coleta em uma
-          árvore de Merkle e ancoramos a raiz em Bitcoin via{" "}
+          Contratos, cartões corporativos e empresas sancionadas — coletados
+          dos portais oficiais, organizados, e cruzados automaticamente para
+          você ver. Quando uma empresa em lista de impedidos ganha contrato
+          público, você fica sabendo.
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3 items-center">
+          <Link to="/gastos" className="btn btn-primary">
+            <Wallet className="size-4" /> Rastrear gastos
+            <ArrowRight className="size-4" />
+          </Link>
+          <Link to="/observatorio" className="btn">
+            <BarChart3 className="size-4" /> Observatório de Transparência
+          </Link>
+          <Link to="/about" className="btn">
+            <Shield className="size-4" /> Como verificamos
+          </Link>
+        </div>
+
+        {/* Citizen stats — pulled from /gastos */}
+        {gastos && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-8 max-w-5xl">
+            <BigStat
+              k="Em contratos rastreados"
+              v={formatBRLCompact(gastos.valor_total_global)}
+              Icon={Wallet}
+            />
+            <BigStat
+              k="Contratos arquivados"
+              v={formatNumber(gastos.total_contratos)}
+              Icon={FileSearch}
+            />
+            <BigStat
+              k="Órgãos contratantes"
+              v={formatNumber(gastos.orgaos_unicos)}
+              Icon={BarChart3}
+            />
+            <BigStat
+              k="Fornecedores únicos"
+              v={formatNumber(gastos.fornecedores_unicos)}
+              Icon={Search}
+            />
+          </div>
+        )}
+      </section>
+
+      {/* Use cases — what citizens can do */}
+      <section className="container-app py-8">
+        <h2 className="text-xl font-semibold mb-4">O que você pode fazer aqui</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <UseCase
+            Icon={Search}
+            title="Buscar uma empresa"
+            body="Digite um CNPJ ou nome no rastreador e veja todos os contratos públicos federais, estaduais e municipais que ela já fechou."
+            cta="Ir ao rastreador"
+            to="/gastos"
+          />
+          <UseCase
+            Icon={AlertTriangle}
+            title="Verificar impedimentos"
+            body="Cruzamos automaticamente CEIS e CNEP com os contratos. Quando uma empresa em lista de impedidos aparece num contrato, fica marcada em vermelho."
+            cta="Ver fornecedores sancionados"
+            to="/gastos"
+          />
+          <UseCase
+            Icon={CheckIcon}
+            title="Auditar uma mudança"
+            body="Cada coleta é hashada e ancorada em Bitcoin. Se um dado oficial mudar amanhã, dá pra provar criptograficamente como estava ontem."
+            cta="Como funciona"
+            to="/about"
+          />
+        </div>
+      </section>
+
+      {/* Technical/observability section — for journalists and researchers */}
+      <section className="container-app py-8 border-t border-ink/10">
+        <div className="text-[0.72rem] font-mono uppercase tracking-widest text-ink-dim mb-2">
+          Para jornalistas e pesquisadores
+        </div>
+        <h2 className="text-xl font-semibold mb-3">A infraestrutura por trás dos números</h2>
+        <p className="text-ink-dim max-w-3xl mb-6">
+          Todos os dados são coletados de APIs oficiais, hashados e ancorados em
+          Bitcoin via{" "}
           <a
             className="underline hover:text-accent"
             href="https://opentimestamps.org"
@@ -52,13 +156,31 @@ export function Landing() {
           >
             OpenTimestamps
           </a>
-          . Qualquer pessoa pode baixar uma prova e verificá-la offline — sem
-          precisar confiar neste servidor continuar no ar.
+          . Você pode baixar a prova e verificar offline — sem confiar neste
+          servidor continuar no ar.
         </p>
-        <div className="mt-6 flex flex-wrap gap-3 items-center">
-          <Link to="/about" className="btn btn-primary">
-            <Shield className="size-4" /> Como verificar
-          </Link>
+
+        {/* Stats grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <Stat k="Fontes monitoradas" v={formatNumber(sources.length)} sub="portais oficiais" />
+          <Stat
+            k="Snapshots persistidos"
+            v={formatNumber(snapshots.length)}
+            sub={`${totalAnchored} com raiz merkle`}
+          />
+          <Stat
+            k="Registros arquivados"
+            v={formatNumber(totalEvents)}
+            sub="eventos individuais"
+          />
+          <Stat
+            k="Última coleta"
+            v={latest ? formatDate(latest.collected_at).split(",")[0] : "—"}
+            sub={latest ? `fonte: ${latest.source_id}` : "aguardando"}
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-3 items-center">
           <Link to="/recent" className="btn">
             <Zap className="size-4" /> Mudanças recentes
           </Link>
@@ -68,7 +190,7 @@ export function Landing() {
             target="_blank"
             rel="noopener"
           >
-            <Download className="size-4" /> Repositório
+            <Download className="size-4" /> Código no GitHub
           </a>
           {healthQ.data && (
             <span className="chip">
@@ -242,4 +364,45 @@ function Stat({ k, v, sub }: { k: string; v: string; sub?: string }) {
       {sub && <div className="text-xs text-ink-dim mt-1">{sub}</div>}
     </div>
   );
+}
+
+function BigStat({ k, v, Icon }: { k: string; v: string; Icon: any }) {
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between">
+        <div className="stat-k">{k}</div>
+        <Icon className="size-4 text-accent" />
+      </div>
+      <div className="stat-v text-2xl md:text-3xl">{v}</div>
+    </div>
+  );
+}
+
+function UseCase({
+  Icon,
+  title,
+  body,
+  cta,
+  to,
+}: {
+  Icon: any;
+  title: string;
+  body: string;
+  cta: string;
+  to: string;
+}) {
+  return (
+    <Link to={to} className="card hover:border-accent transition group">
+      <Icon className="size-6 text-accent" />
+      <div className="font-semibold mt-3">{title}</div>
+      <p className="text-sm text-ink-dim mt-2">{body}</p>
+      <div className="text-sm text-accent mt-3 inline-flex items-center gap-1 group-hover:gap-2 transition-all">
+        {cta} <ArrowRight className="size-3" />
+      </div>
+    </Link>
+  );
+}
+
+function CheckIcon(props: { className?: string }) {
+  return <Check {...props} />;
 }

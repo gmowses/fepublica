@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { Search, TrendingUp, AlertTriangle, Building2, Users, Wallet } from "lucide-react";
+import { Search, TrendingUp, AlertTriangle, Building2, Users, Wallet, CreditCard } from "lucide-react";
 import { useState } from "react";
 
 interface Stats {
@@ -177,6 +177,147 @@ export function Gastos() {
             Nenhum contrato encontrado {search ? `para "${search}"` : ""}.
           </div>
         )}
+      </div>
+
+      {/* R2 — Cartões CPGF section */}
+      <CartoesSection />
+    </div>
+  );
+}
+
+interface CartoesStats {
+  total_transacoes: number;
+  valor_total: number;
+  orgaos_unicos: number;
+  portadores_unicos: number;
+}
+
+interface Cartao {
+  id: number;
+  data_transacao?: string;
+  valor_transacao?: number;
+  estab_nome?: string;
+  estab_cnpj?: string;
+  portador_nome?: string;
+  portador_cpf?: string;
+  orgao_max_nome?: string;
+  orgao_max_sigla?: string;
+  unidade_nome?: string;
+}
+
+function CartoesSection() {
+  const statsQ = useQuery({
+    queryKey: ["cartoes-stats"],
+    queryFn: () => fetch("/api/gastos/cartoes/stats").then((r) => r.json()) as Promise<CartoesStats>,
+  });
+  const topPortadores = useQuery({
+    queryKey: ["cartoes-top-portadores"],
+    queryFn: () =>
+      fetch("/api/gastos/cartoes/top-portadores?limit=10").then((r) => r.json()) as Promise<{ top: TopRow[] }>,
+  });
+  const topOrgaosCart = useQuery({
+    queryKey: ["cartoes-top-orgaos"],
+    queryFn: () =>
+      fetch("/api/gastos/cartoes/top-orgaos?limit=10").then((r) => r.json()) as Promise<{ top: TopRow[] }>,
+  });
+  const listQ = useQuery({
+    queryKey: ["cartoes-list"],
+    queryFn: () =>
+      fetch("/api/gastos/cartoes?limit=10").then((r) => r.json()) as Promise<{
+        total: number;
+        cartoes: Cartao[];
+      }>,
+  });
+
+  const stats = statsQ.data;
+  const cartoes = listQ.data?.cartoes ?? [];
+
+  return (
+    <>
+      <div className="border-t border-ink/10 mt-12 pt-10">
+        <div className="text-[0.72rem] font-mono uppercase tracking-widest text-accent mb-2">
+          Cartão corporativo do governo federal
+        </div>
+        <h2 className="text-2xl md:text-3xl font-bold tracking-tight">
+          Quem usa o CPGF, quanto, e em quê.
+        </h2>
+        <p className="mt-3 text-ink-dim max-w-3xl">
+          Cartão de Pagamento do Governo Federal (CPGF) — usado por servidores para
+          despesas operacionais. Cada transação é pública por força da Lei de Acesso
+          à Informação. Coletado mensalmente do Portal da Transparência da CGU.
+        </p>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+          <StatCard
+            k="Valor total no CPGF"
+            v={formatBRL(stats?.valor_total)}
+            Icon={CreditCard}
+          />
+          <StatCard
+            k="Transações"
+            v={(stats?.total_transacoes ?? 0).toLocaleString("pt-BR")}
+            Icon={TrendingUp}
+          />
+          <StatCard
+            k="Órgãos com gasto"
+            v={(stats?.orgaos_unicos ?? 0).toLocaleString("pt-BR")}
+            Icon={Building2}
+          />
+          <StatCard
+            k="Portadores únicos"
+            v={(stats?.portadores_unicos ?? 0).toLocaleString("pt-BR")}
+            Icon={Users}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-6">
+          <div className="card">
+            <h3 className="text-lg font-semibold mb-3">Top 10 portadores por valor</h3>
+            <TopList rows={topPortadores.data?.top ?? []} linkPrefix={null} />
+          </div>
+          <div className="card">
+            <h3 className="text-lg font-semibold mb-3">Top 10 órgãos por valor (CPGF)</h3>
+            <TopList rows={topOrgaosCart.data?.top ?? []} linkPrefix={null} />
+          </div>
+        </div>
+
+        <h3 className="text-lg font-semibold mt-8 mb-3">Maiores transações no CPGF</h3>
+        <div className="space-y-3">
+          {cartoes.map((c) => (
+            <CartaoCard key={c.id} c={c} />
+          ))}
+          {cartoes.length === 0 && !listQ.isLoading && (
+            <div className="card text-center text-ink-dim py-8">
+              Sem dados de CPGF ainda. Coleta agendada para o dia 5 de cada mês.
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function CartaoCard({ c }: { c: Cartao }) {
+  return (
+    <div className="card">
+      <div className="flex flex-wrap gap-3 items-start justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="text-xs text-ink-dim font-mono">
+            {c.data_transacao} {c.orgao_max_sigla ? "· " + c.orgao_max_sigla : ""}
+          </div>
+          <div className="mt-1 font-semibold line-clamp-2">
+            {c.estab_nome || "Estabelecimento sem informação"}
+          </div>
+          <div className="mt-2 text-sm">
+            <span className="text-ink-dim">Pago por </span>
+            <span className="font-medium">{c.portador_nome || "—"}</span>
+            <span className="text-ink-dim"> · {c.unidade_nome || "—"}</span>
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="text-2xl font-bold text-accent">{formatBRL(c.valor_transacao)}</div>
+          <div className="text-xs text-ink-dim font-mono">CPGF</div>
+        </div>
       </div>
     </div>
   );

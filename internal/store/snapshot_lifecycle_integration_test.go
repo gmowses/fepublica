@@ -43,6 +43,7 @@ func integrationTestStore(t *testing.T, migrations ...string) *Store {
 	if _, err := pool.Exec(context.Background(), "CREATE SCHEMA "+schema); err != nil {
 		t.Fatalf("create test schema: %v", err)
 	}
+	ensurePGTrgm(t, pool)
 
 	for _, name := range migrations {
 		migration, err := os.ReadFile(filepath.Join("..", "..", "db", "migrations", name))
@@ -54,6 +55,28 @@ func integrationTestStore(t *testing.T, migrations ...string) *Store {
 		}
 	}
 	return &Store{pool: pool}
+}
+
+func ensurePGTrgm(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		t.Fatalf("acquire pg_trgm setup connection: %v", err)
+	}
+	defer conn.Release()
+	const lockID int64 = 6_351_541_191
+	if _, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1)", lockID); err != nil {
+		t.Fatalf("lock pg_trgm setup: %v", err)
+	}
+	defer func() {
+		if _, err := conn.Exec(ctx, "SELECT pg_advisory_unlock($1)", lockID); err != nil {
+			t.Errorf("unlock pg_trgm setup: %v", err)
+		}
+	}()
+	if _, err := conn.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public"); err != nil {
+		t.Fatalf("create pg_trgm extension: %v", err)
+	}
 }
 
 func lifecycleEvent(snapshotID int64, externalID string) InsertEventParams {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,14 +64,24 @@ func proofIntegrationServer(t *testing.T) (*Server, *store.Store) {
 	}
 	pool.Close()
 
-	// pgx passes unknown connection settings as PostgreSQL runtime parameters.
 	// The private search_path keeps Store's pool in this test schema as well.
-	s, err := store.Open(context.Background(), dsn+" search_path="+schema+",public")
+	s, err := store.Open(context.Background(), testSchemaDSN(dsn, schema))
 	if err != nil {
 		t.Fatalf("open test store: %v", err)
 	}
 	t.Cleanup(s.Close)
 	return New(s, zerolog.Nop(), "test", ""), s
+}
+
+func testSchemaDSN(dsn, schema string) string {
+	u, err := url.Parse(dsn)
+	if err == nil && (u.Scheme == "postgres" || u.Scheme == "postgresql") {
+		query := u.Query()
+		query.Set("search_path", schema+",public")
+		u.RawQuery = query.Encode()
+		return u.String()
+	}
+	return dsn + " search_path=" + schema + ",public"
 }
 
 func proofSnapshot(t *testing.T, s *store.Store, events []store.InsertEventParams, root [merkle.HashSize]byte) int64 {

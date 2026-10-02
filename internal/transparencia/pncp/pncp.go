@@ -51,10 +51,10 @@ const (
 // pageResponse is the envelope shape returned by PNCP.
 type pageResponse struct {
 	Data             []json.RawMessage `json:"data"`
-	TotalPaginas     int               `json:"totalPaginas"`
+	TotalPaginas     *int              `json:"totalPaginas"`
 	TotalRegistros   int               `json:"totalRegistros"`
 	NumeroPagina     int               `json:"numeroPagina"`
-	PaginasRestantes int               `json:"paginasRestantes"`
+	PaginasRestantes *int              `json:"paginasRestantes"`
 	Empty            bool              `json:"empty"`
 }
 
@@ -192,28 +192,55 @@ func Fetch(ctx context.Context, _ *transparencia.Client) (*transparencia.FetchRe
 			result.TotalBytes += int64(len(item))
 		}
 		result.TotalPages = page
+		totalPages := 0
+		if envelope.TotalPaginas != nil {
+			totalPages = *envelope.TotalPaginas
+		}
 		log.Printf("pncp: page %d done in %s (records=%d total_so_far=%d total_pages=%d)",
-			page, time.Since(pageStart).Round(time.Second), len(envelope.Data), len(result.Records), envelope.TotalPaginas)
+			page, time.Since(pageStart).Round(time.Second), len(envelope.Data), len(result.Records), totalPages)
 
 		if envelope.Empty {
 			break
 		}
-		if envelope.TotalPaginas > 0 && page >= envelope.TotalPaginas {
-			break
+		fetchNext, err := shouldFetchNextPage(page, len(envelope.Data), envelope)
+		if err != nil {
+			return nil, err
 		}
-		if envelope.PaginasRestantes == 0 {
-			break
-		}
-		if len(envelope.Data) < PageSize {
-			break
-		}
-		if page >= maxPages {
+		if !fetchNext {
 			break
 		}
 		page++
 	}
 
 	return result, nil
+}
+
+// shouldFetchNextPage uses explicit pagination metadata when available. A
+// missing field is distinct from a reported zero, so bare-array responses can
+// still be safely paged until a short page while envelope responses retain the
+// API's declared page count as the source of truth.
+func shouldFetchNextPage(page, recordCount int, envelope pageResponse) (bool, error) {
+	var more bool
+	switch {
+	case envelope.TotalPaginas != nil:
+		total := *envelope.TotalPaginas
+		if total < page {
+			return false, fmt.Errorf("pncp: page %d exceeds reported total pages %d", page, total)
+		}
+		more = page < total
+	case envelope.PaginasRestantes != nil:
+		remaining := *envelope.PaginasRestantes
+		if remaining < 0 {
+			return false, fmt.Errorf("pncp: page %d has invalid remaining pages %d", page, remaining)
+		}
+		more = remaining > 0
+	default:
+		more = recordCount >= PageSize
+	}
+	if more && page >= maxPages {
+		return false, fmt.Errorf("pncp: pagination exceeds maximum of %d pages", maxPages)
+	}
+	return more, nil
 }
 
 func truncate(s string, n int) string {

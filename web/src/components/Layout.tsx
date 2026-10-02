@@ -1,5 +1,5 @@
 import { Link, NavLink } from "react-router-dom";
-import { Moon, Sun, Github } from "lucide-react";
+import { Menu, Moon, Sun, X, Github } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -14,8 +14,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 function Header() {
   const [theme, setTheme] = useState<"dark" | "light">(() =>
-    document.documentElement.classList.contains("light") ? "light" : "dark"
+    document.documentElement.classList.contains("light") ? "light" : "dark",
   );
+  const [isNavOpen, setIsNavOpen] = useState(false);
 
   useEffect(() => {
     if (theme === "light") document.documentElement.classList.add("light");
@@ -24,28 +25,29 @@ function Header() {
   }, [theme]);
 
   return (
-    <header className="border-b border-ink/10 sticky top-0 z-30 backdrop-blur bg-bg/80">
-      <div className="container-app flex items-center justify-between h-14 gap-4">
-        <Link to="/" className="flex items-center gap-2">
+    <header className="sticky top-0 z-30 border-b border-ink/15 bg-bg/90 backdrop-blur">
+      <div className="container-app flex h-16 items-center justify-between gap-3">
+        <Link to="/" className="flex min-w-0 items-center gap-2">
           <Logo />
-          <span className="font-semibold tracking-tight">Fé Pública</span>
+          <span className="truncate font-display font-bold tracking-tight">
+            Fé Pública
+          </span>
           <span className="hidden sm:inline text-xs font-mono text-ink-dim">
-            alpha
+            1.6
           </span>
         </Link>
-        <nav className="flex items-center gap-1 text-sm">
-          <NavItem to="/">Início</NavItem>
-          <NavItem to="/gastos">Gastos</NavItem>
-          <NavItem to="/forenses">Forenses</NavItem>
-          <NavItem to="/observatorio">Observatório</NavItem>
-          <NavItem to="/entes">Entes</NavItem>
-          <NavItem to="/recent">Recentes</NavItem>
-          <NavItem to="/about">Sobre</NavItem>
+        <nav
+          className="hidden md:flex items-center gap-1 text-sm"
+          aria-label="Navegação principal"
+        >
+          <NavigationItems />
+        </nav>
+        <div className="flex items-center gap-1">
           <a
             href="https://github.com/gmowses/fepublica"
             target="_blank"
             rel="noopener"
-            className="ml-2 p-2 rounded-md hover:bg-bg-card"
+            className="rounded-md p-2 hover:bg-bg-soft"
             aria-label="Repositório no GitHub"
           >
             <Github className="size-4" />
@@ -53,7 +55,7 @@ function Header() {
           <button
             type="button"
             onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-            className="p-2 rounded-md hover:bg-bg-card"
+            className="rounded-md p-2 hover:bg-bg-soft"
             aria-label="Alternar tema"
           >
             {theme === "light" ? (
@@ -62,28 +64,80 @@ function Header() {
               <Sun className="size-4" />
             )}
           </button>
-        </nav>
+          <button
+            type="button"
+            onClick={() => setIsNavOpen((open) => !open)}
+            className="rounded-md p-2 hover:bg-bg-soft md:hidden"
+            aria-label={
+              isNavOpen ? "Fechar menu de navegação" : "Abrir menu de navegação"
+            }
+            aria-controls="mobile-navigation"
+            aria-expanded={isNavOpen}
+          >
+            {isNavOpen ? <X className="size-4" /> : <Menu className="size-4" />}
+          </button>
+        </div>
       </div>
+      {isNavOpen && (
+        <nav
+          id="mobile-navigation"
+          className="container-app grid grid-cols-2 gap-1 border-t border-ink/15 py-3 text-sm md:hidden"
+          aria-label="Navegação principal"
+        >
+          <NavigationItems onNavigate={() => setIsNavOpen(false)} />
+        </nav>
+      )}
     </header>
+  );
+}
+
+function NavigationItems({ onNavigate }: { onNavigate?: () => void }) {
+  return (
+    <>
+      <NavItem to="/" onNavigate={onNavigate}>
+        Início
+      </NavItem>
+      <NavItem to="/gastos" onNavigate={onNavigate}>
+        Gastos
+      </NavItem>
+      <NavItem to="/forenses" onNavigate={onNavigate}>
+        Forenses
+      </NavItem>
+      <NavItem to="/observatorio" onNavigate={onNavigate}>
+        Observatório
+      </NavItem>
+      <NavItem to="/entes" onNavigate={onNavigate}>
+        Entes
+      </NavItem>
+      <NavItem to="/recent" onNavigate={onNavigate}>
+        Recentes
+      </NavItem>
+      <NavItem to="/about" onNavigate={onNavigate}>
+        Sobre
+      </NavItem>
+    </>
   );
 }
 
 function NavItem({
   to,
   children,
+  onNavigate,
 }: {
   to: string;
   children: React.ReactNode;
+  onNavigate?: () => void;
 }) {
   return (
     <NavLink
       to={to}
       end
+      onClick={onNavigate}
       className={({ isActive }) =>
-        "px-3 py-1.5 rounded-md transition " +
+        "rounded-md px-3 py-2 transition-colors " +
         (isActive
-          ? "text-accent bg-bg-card"
-          : "text-ink hover:bg-bg-card hover:text-accent")
+          ? "bg-bg-soft text-accent"
+          : "text-ink hover:bg-bg-soft hover:text-accent")
       }
     >
       {children}
@@ -114,8 +168,8 @@ function Logo() {
 
 function Footer() {
   return (
-    <footer className="border-t border-ink/10 mt-12">
-      <div className="container-app py-6 text-xs text-ink-dim flex flex-col sm:flex-row gap-3 justify-between">
+    <footer className="mt-12 border-t border-ink/15 bg-bg-soft">
+      <div className="container-app flex flex-col justify-between gap-3 py-7 text-xs leading-5 text-ink-dim sm:flex-row">
         <div>
           Fé Pública · software livre sob{" "}
           <a

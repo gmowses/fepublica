@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api, formatDate, formatNumber, shortHash } from "../lib/api";
 import { SnapshotsChart } from "../components/SnapshotsChart";
 import { ExternalLink } from "lucide-react";
+import { safeHttpURL } from "../lib/urls";
 
 export function SourceDetail() {
   const { id } = useParams();
@@ -17,6 +18,7 @@ export function SourceDetail() {
   const source = sourcesQ.data?.sources.find((s) => s.id === id);
   const snapshots = snapsQ.data?.snapshots ?? [];
   const totalEvents = snapshots.reduce((acc, s) => acc + s.record_count, 0);
+  const sourceURL = safeHttpURL(source?.base_url);
 
   if (!source && sourcesQ.isSuccess) {
     return (
@@ -46,14 +48,14 @@ export function SourceDetail() {
             source_id: {source.id}
           </div>
           <p className="text-ink-dim mt-3 max-w-3xl">{source.description}</p>
-          <a
+          {sourceURL && <a
             className="btn mt-4"
-            href={source.base_url}
+            href={sourceURL}
             target="_blank"
             rel="noopener"
           >
             <ExternalLink className="size-4" /> API oficial
-          </a>
+          </a>}
         </>
       )}
 
@@ -100,6 +102,12 @@ export function SourceDetail() {
                 </td>
                 <td className="px-4 py-2 text-right tabular-nums">
                   {formatNumber(s.record_count)}
+                  {s.lifecycle_status === "collecting" && (
+                    <span className="chip chip-warn ml-2">coletando</span>
+                  )}
+                  {s.lifecycle_status === "failed" && (
+                    <span className="chip chip-warn ml-2">falhou</span>
+                  )}
                 </td>
                 <td className="px-4 py-2 font-mono text-[0.72rem] text-ink-dim">
                   {s.merkle_root ? (

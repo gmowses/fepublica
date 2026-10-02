@@ -65,24 +65,40 @@ func run(ctx context.Context, once bool, interval time.Duration, batch int) erro
 			return nil
 		}
 		log.Info().Int("count", len(events)).Msg("indexing batch")
-		indexed := 0
-		failed := 0
+		indexed, failed, terminal := 0, 0, 0
 		for i := range events {
 			ev := &events[i]
 			row, err := contratos.Parse(ev.CanonicalJSON, ev.ExternalID)
 			if err != nil {
 				log.Error().Err(err).Int64("event_id", ev.ID).Msg("parse failed")
+				failure, recordErr := st.RecordProjectionFailure(ctx, store.ProjectionContratos, ev.ID, err)
+				if recordErr != nil {
+					return recordErr
+				}
+				if failure.Terminal {
+					terminal++
+				}
 				failed++
 				continue
 			}
 			if err := st.InsertContrato(ctx, ev.ID, ev.SnapshotID, row, ev.CollectedAt); err != nil {
 				log.Error().Err(err).Int64("event_id", ev.ID).Msg("insert failed")
+				failure, recordErr := st.RecordProjectionFailure(ctx, store.ProjectionContratos, ev.ID, err)
+				if recordErr != nil {
+					return recordErr
+				}
+				if failure.Terminal {
+					terminal++
+				}
 				failed++
 				continue
 			}
+			if err := st.ResolveProjectionFailure(ctx, store.ProjectionContratos, ev.ID); err != nil {
+				return err
+			}
 			indexed++
 		}
-		log.Info().Int("indexed", indexed).Int("failed", failed).Msg("batch complete")
+		log.Info().Int("indexed", indexed).Int("failed", failed).Int("terminal", terminal).Msg("batch complete")
 		return nil
 	}
 

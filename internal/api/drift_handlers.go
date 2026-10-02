@@ -11,15 +11,15 @@ import (
 
 // diffRunView is the JSON shape returned by the diff_runs endpoints.
 type diffRunView struct {
-	ID             int64  `json:"id"`
-	SourceID       string `json:"source_id"`
-	SnapshotAID    int64  `json:"snapshot_a_id"`
-	SnapshotBID    int64  `json:"snapshot_b_id"`
-	AddedCount     int    `json:"added_count"`
-	RemovedCount   int    `json:"removed_count"`
-	ModifiedCount  int    `json:"modified_count"`
-	RanAt          string `json:"ran_at"`
-	DurationMS     int    `json:"duration_ms"`
+	ID            int64  `json:"id"`
+	SourceID      string `json:"source_id"`
+	SnapshotAID   int64  `json:"snapshot_a_id"`
+	SnapshotBID   int64  `json:"snapshot_b_id"`
+	AddedCount    int    `json:"added_count"`
+	RemovedCount  int    `json:"removed_count"`
+	ModifiedCount int    `json:"modified_count"`
+	RanAt         string `json:"ran_at"`
+	DurationMS    int    `json:"duration_ms"`
 }
 
 func diffRunDTO(dr *store.DiffRun) diffRunView {
@@ -76,16 +76,16 @@ func (s *Server) handleGetDiffRun(w http.ResponseWriter, r *http.Request) {
 
 // changeEventView is the JSON shape returned by the change_events endpoints.
 type changeEventView struct {
-	ID           int64   `json:"id"`
-	DiffRunID    int64   `json:"diff_run_id"`
-	SourceID     string  `json:"source_id"`
-	EnteID       *string `json:"ente_id,omitempty"`
-	ExternalID   string  `json:"external_id"`
-	ChangeType   string  `json:"change_type"`
-	ContentHashA string  `json:"content_hash_a,omitempty"`
-	ContentHashB string  `json:"content_hash_b,omitempty"`
-	DetectedAt   string  `json:"detected_at"`
-	Severity     string  `json:"severity"`
+	ID           int64           `json:"id"`
+	DiffRunID    int64           `json:"diff_run_id"`
+	SourceID     string          `json:"source_id"`
+	EnteID       *string         `json:"ente_id,omitempty"`
+	ExternalID   string          `json:"external_id"`
+	ChangeType   string          `json:"change_type"`
+	ContentHashA string          `json:"content_hash_a,omitempty"`
+	ContentHashB string          `json:"content_hash_b,omitempty"`
+	DetectedAt   string          `json:"detected_at"`
+	Severity     string          `json:"severity"`
 	Published    map[string]bool `json:"published"`
 }
 

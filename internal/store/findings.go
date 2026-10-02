@@ -20,7 +20,7 @@ func (s *Store) PersistFindings(ctx context.Context, findings []Finding) ([]int6
 	if err != nil {
 		return nil, fmt.Errorf("findings: begin: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	var newIDs []int64
 	for _, f := range findings {
@@ -207,13 +207,13 @@ func (s *Store) ConfirmFinding(ctx context.Context, id int64, by string) error {
 
 // FindingsCounts is the dashboard summary for the persisted findings table.
 type FindingsCounts struct {
-	Total       int64                  `json:"total"`
-	BySeverity  map[string]int64       `json:"by_severity"`
-	ByType      map[string]int64       `json:"by_type"`
-	Active      int64                  `json:"active"`
-	Dismissed   int64                  `json:"dismissed"`
-	Confirmed   int64                  `json:"confirmed"`
-	NewLast24h  int64                  `json:"new_last_24h"`
+	Total      int64            `json:"total"`
+	BySeverity map[string]int64 `json:"by_severity"`
+	ByType     map[string]int64 `json:"by_type"`
+	Active     int64            `json:"active"`
+	Dismissed  int64            `json:"dismissed"`
+	Confirmed  int64            `json:"confirmed"`
+	NewLast24h int64            `json:"new_last_24h"`
 }
 
 // GetFindingsCounts is the persisted equivalent of GetForensesSummary.

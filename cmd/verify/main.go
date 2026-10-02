@@ -34,6 +34,7 @@ import (
 
 	"github.com/gmowses/fepublica/internal/canonjson"
 	"github.com/gmowses/fepublica/internal/merkle"
+	"github.com/gmowses/fepublica/internal/ots"
 )
 
 var version = "dev"
@@ -176,18 +177,19 @@ func verify(path string) error {
 		return fmt.Errorf("proof contains no anchors")
 	}
 	for i, a := range p.Anchors {
+		rcpt, err := base64.StdEncoding.DecodeString(a.ReceiptBase64)
+		if err != nil {
+			return fmt.Errorf("decode anchor %d receipt: %w", i+1, err)
+		}
+		info, err := ots.ValidateTimestamp(declaredRoot[:], rcpt)
+		if err != nil {
+			return fmt.Errorf("validate anchor %d receipt: %w", i+1, err)
+		}
 		status := "pending"
-		if a.Upgraded {
-			status = "upgraded (confirmed in Bitcoin)"
-		}
 		block := ""
-		if a.BlockHeight != nil {
-			block = fmt.Sprintf(" block=%d", *a.BlockHeight)
-		}
-		rcpt, derr := base64.StdEncoding.DecodeString(a.ReceiptBase64)
-		if derr != nil {
-			fmt.Printf("  #%d %s — invalid base64 receipt\n", i+1, a.CalendarURL)
-			continue
+		if info.BitcoinBlockHeight != nil {
+			status = "Bitcoin attestation present (requires ots verification)"
+			block = fmt.Sprintf(" block=%d", *info.BitcoinBlockHeight)
 		}
 		fmt.Printf("  #%d %s\n      status=%s%s receipt=%d bytes submitted=%s\n",
 			i+1, a.CalendarURL, status, block, len(rcpt), a.SubmittedAt)
@@ -195,7 +197,7 @@ func verify(path string) error {
 	fmt.Printf("\nLocal verification passed.\n")
 	fmt.Printf("To verify the Bitcoin anchor end-to-end, run:\n")
 	fmt.Printf("  fepublica-verify extract %s --out ./receipts/\n", path)
-	fmt.Printf("  ots verify ./receipts/<file>.ots\n")
+	fmt.Printf("  ots verify -d %s ./receipts/<file>.ots\n", p.Merkle.Root)
 	fmt.Printf("(install the reference CLI with: pip install opentimestamps-client)\n")
 	return nil
 }
@@ -209,6 +211,16 @@ func extract(path, outDir string) error {
 	if err := json.Unmarshal(data, &p); err != nil {
 		return fmt.Errorf("parse proof: %w", err)
 	}
+	if p.Version != 1 {
+		return fmt.Errorf("unsupported proof version %d (only 1 supported)", p.Version)
+	}
+	root, err := hex.DecodeString(p.Merkle.Root)
+	if err != nil {
+		return fmt.Errorf("decode merkle root: %w", err)
+	}
+	if len(root) != merkle.HashSize {
+		return fmt.Errorf("merkle root wrong length (%d)", len(root))
+	}
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir: %w", err)
 	}
@@ -217,11 +229,15 @@ func extract(path, outDir string) error {
 		if err != nil {
 			return fmt.Errorf("decode anchor %d: %w", i, err)
 		}
+		detached, err := ots.WrapDetachedTimestamp(root, rcpt)
+		if err != nil {
+			return fmt.Errorf("validate anchor %d receipt: %w", i, err)
+		}
 		name := fmt.Sprintf("%s/snapshot-%d-anchor-%d.ots", outDir, p.SnapshotID, i+1)
-		if err := os.WriteFile(name, rcpt, 0o644); err != nil {
+		if err := os.WriteFile(name, detached, 0o644); err != nil {
 			return fmt.Errorf("write %s: %w", name, err)
 		}
-		fmt.Printf("wrote %s (%d bytes)\n", name, len(rcpt))
+		fmt.Printf("wrote %s (%d bytes)\n", name, len(detached))
 	}
 	return nil
 }

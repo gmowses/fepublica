@@ -2,34 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api, formatDate, formatNumber, shortHash } from "../lib/api";
 import {
-  BarChart3,
-  Check,
-  Download,
-  FileSearch,
-  Shield,
-  Zap,
-  Wallet,
-  Search,
-  AlertTriangle,
   ArrowRight,
+  CheckCircle2,
+  Database,
+  FileCheck2,
+  Fingerprint,
+  Search,
+  ShieldCheck,
 } from "lucide-react";
-import { BrazilMap } from "../components/BrazilMap";
 import { SnapshotsChart } from "../components/SnapshotsChart";
-
-interface GastosStats {
-  total_contratos: number;
-  valor_total_global: number;
-  orgaos_unicos: number;
-  fornecedores_unicos: number;
-}
-
-function formatBRLCompact(n?: number): string {
-  if (n == null) return "—";
-  if (n >= 1e9) return "R$ " + (n / 1e9).toFixed(1).replace(".", ",") + " bi";
-  if (n >= 1e6) return "R$ " + (n / 1e6).toFixed(1).replace(".", ",") + " mi";
-  if (n >= 1e3) return "R$ " + (n / 1e3).toFixed(0) + " mil";
-  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
-}
 
 export function Landing() {
   const sourcesQ = useQuery({ queryKey: ["sources"], queryFn: api.sources });
@@ -37,372 +18,362 @@ export function Landing() {
     queryKey: ["snapshots", { limit: 200 }],
     queryFn: () => api.snapshots({ limit: 200 }),
   });
-  const healthQ = useQuery({
-    queryKey: ["health"],
-    queryFn: api.health,
-    refetchInterval: 60_000,
-  });
-  const gastosQ = useQuery({
-    queryKey: ["gastos-stats"],
-    queryFn: () => fetch("/api/gastos/stats").then((r) => r.json()) as Promise<GastosStats>,
-  });
-
   const sources = sourcesQ.data?.sources ?? [];
   const snapshots = snapsQ.data?.snapshots ?? [];
-  const totalEvents = snapshots.reduce((acc, s) => acc + s.record_count, 0);
-  const totalAnchored = snapshots.filter((s) => !!s.merkle_root).length;
-  const latest = snapshots[0];
-  const gastos = gastosQ.data;
+  const completeSnapshots = snapshots.filter(
+    (snapshot) => snapshot.lifecycle_status === "complete",
+  );
+  const completeRecords = completeSnapshots.reduce(
+    (total, snapshot) => total + snapshot.record_count,
+    0,
+  );
+  const latestComplete = completeSnapshots[0];
 
   return (
-    <div>
-      {/* Hero — citizen-first */}
-      <section className="container-app pt-10 md:pt-16 pb-8">
-        <div className="text-[0.72rem] font-mono uppercase tracking-widest text-accent mb-3">
-          Fé Pública · alpha
+    <div className="pb-8">
+      <section className="container-app pt-10 md:pt-16">
+        <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_23rem] lg:gap-16">
+          <div>
+            <p className="stat-k mb-4 text-accent">
+              Arquivo público verificável · release 1.6
+            </p>
+            <h1 className="max-w-3xl font-display text-4xl font-bold leading-[0.98] tracking-[-0.045em] text-ink sm:text-5xl md:text-6xl">
+              Dados públicos.
+              <br />
+              Memória verificável.
+            </h1>
+            <p className="mt-6 max-w-2xl text-base leading-7 text-ink-dim md:text-lg">
+              Fé Pública preserva coletas de fontes oficiais para que cidadãos,
+              jornalistas e pesquisadores possam consultar, comparar e examinar
+              os registros ao longo do tempo.
+            </p>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <Link to="/gastos" className="btn btn-primary">
+                <Search className="size-4" /> Explorar gastos{" "}
+                <ArrowRight className="size-4" />
+              </Link>
+              <Link to="/about" className="btn">
+                <ShieldCheck className="size-4" /> Como verificamos
+              </Link>
+            </div>
+          </div>
+          <PreservationFlow />
         </div>
-        <h1 className="text-3xl md:text-5xl font-bold leading-[1.1] tracking-tight max-w-4xl">
-          O que o governo brasileiro está
-          <br className="hidden sm:block" /> fazendo com o seu dinheiro.
-        </h1>
-        <p className="mt-4 text-lg text-ink-dim max-w-3xl">
-          Contratos, cartões corporativos e empresas sancionadas — coletados
-          dos portais oficiais, organizados, e cruzados automaticamente para
-          você ver. Quando uma empresa em lista de impedidos ganha contrato
-          público, você fica sabendo.
-        </p>
-        <div className="mt-6 flex flex-wrap gap-3 items-center">
-          <Link to="/gastos" className="btn btn-primary">
-            <Wallet className="size-4" /> Rastrear gastos
-            <ArrowRight className="size-4" />
-          </Link>
-          <Link to="/observatorio" className="btn">
-            <BarChart3 className="size-4" /> Observatório de Transparência
-          </Link>
-          <Link to="/about" className="btn">
-            <Shield className="size-4" /> Como verificamos
-          </Link>
-        </div>
+      </section>
 
-        {/* Citizen stats — pulled from /gastos */}
-        {gastos && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-8 max-w-5xl">
-            <BigStat
-              k="Em contratos rastreados"
-              v={formatBRLCompact(gastos.valor_total_global)}
-              Icon={Wallet}
-            />
-            <BigStat
-              k="Contratos arquivados"
-              v={formatNumber(gastos.total_contratos)}
-              Icon={FileSearch}
-            />
-            <BigStat
-              k="Órgãos contratantes"
-              v={formatNumber(gastos.orgaos_unicos)}
-              Icon={BarChart3}
-            />
-            <BigStat
-              k="Fornecedores únicos"
-              v={formatNumber(gastos.fornecedores_unicos)}
-              Icon={Search}
-            />
+      <section className="container-app mt-14 border-y border-ink/15 py-6">
+        <div className="grid gap-6 sm:grid-cols-3">
+          <Overview
+            k="Fontes disponíveis"
+            v={
+              sourcesQ.isLoading
+                ? "…"
+                : sourcesQ.isError
+                  ? "—"
+                  : formatNumber(sources.length)
+            }
+            sub={
+              sourcesQ.isError
+                ? "catálogo indisponível"
+                : "cadastradas neste catálogo"
+            }
+          />
+          <Overview
+            k="Coletas concluídas"
+            v={
+              snapsQ.isLoading
+                ? "…"
+                : snapsQ.isError
+                  ? "—"
+                  : formatNumber(completeSnapshots.length)
+            }
+            sub={
+              snapsQ.isError
+                ? "arquivo recente indisponível"
+                : "entre as 200 mais recentes"
+            }
+          />
+          <Overview
+            k="Registros em coletas concluídas"
+            v={
+              snapsQ.isLoading
+                ? "…"
+                : snapsQ.isError
+                  ? "—"
+                  : formatNumber(completeRecords)
+            }
+            sub={
+              snapsQ.isError
+                ? "arquivo recente indisponível"
+                : "entre as 200 mais recentes"
+            }
+          />
+        </div>
+      </section>
+
+      <section className="container-app py-12 md:py-16">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="stat-k mb-2">Para investigar</p>
+            <h2 className="font-display text-2xl font-bold tracking-tight md:text-3xl">
+              Comece pela pergunta que importa.
+            </h2>
+          </div>
+          <Link
+            to="/recent"
+            className="text-sm font-semibold text-accent hover:underline"
+          >
+            Ver coletas recentes
+          </Link>
+        </div>
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          <UseCase
+            icon={Search}
+            title="Consultar gastos"
+            body="Pesquise contratos e despesas por órgão, fornecedor ou identificador."
+            to="/gastos"
+            cta="Explorar gastos"
+          />
+          <UseCase
+            icon={FileCheck2}
+            title="Comparar coletas"
+            body="Abra um snapshot e compare versões para examinar mudanças nos registros."
+            to="/recent"
+            cta="Ver coletas"
+          />
+          <UseCase
+            icon={Fingerprint}
+            title="Examinar a prova"
+            body="Baixe uma prova de inclusão quando a raiz Merkle estiver disponível."
+            to="/about"
+            cta="Entender a verificação"
+          />
+        </div>
+      </section>
+
+      <section className="container-app grid gap-5 border-t border-ink/15 py-12 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,.65fr)]">
+        <div className="card overflow-hidden p-0">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-ink/15 px-5 py-4">
+            <div>
+              <p className="stat-k">Arquivo recente</p>
+              <h2 className="mt-1 font-display text-xl font-bold tracking-tight">
+                Coletas concluídas
+              </h2>
+            </div>
+            <span className="chip chip-ok">
+              <CheckCircle2 className="size-3" /> ciclo encerrado
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-ink-dim">
+                <tr>
+                  <th className="px-5 py-3">snapshot</th>
+                  <th className="px-5 py-3">fonte</th>
+                  <th className="px-5 py-3">coletado em</th>
+                  <th className="px-5 py-3 text-right">registros</th>
+                  <th className="px-5 py-3">raiz Merkle</th>
+                </tr>
+              </thead>
+              <tbody>
+                {completeSnapshots.slice(0, 8).map((snapshot) => (
+                  <tr key={snapshot.id}>
+                    <td className="px-5 py-3 font-mono">
+                      <Link
+                        to={`/snapshots/${snapshot.id}`}
+                        className="font-medium text-accent hover:underline"
+                      >
+                        #{snapshot.id}
+                      </Link>
+                    </td>
+                    <td className="px-5 py-3">{snapshot.source_id}</td>
+                    <td className="px-5 py-3 text-ink-dim">
+                      {formatDate(snapshot.collected_at)}
+                    </td>
+                    <td className="px-5 py-3 text-right tabular-nums">
+                      {formatNumber(snapshot.record_count)}
+                    </td>
+                    <td className="px-5 py-3 font-mono text-xs text-ink-dim">
+                      {snapshot.merkle_root
+                        ? shortHash(snapshot.merkle_root, 12)
+                        : "raiz pendente"}
+                    </td>
+                  </tr>
+                ))}
+                {snapsQ.isError && (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-5 py-10 text-center text-ink-dim"
+                    >
+                      Não foi possível carregar as coletas recentes.{" "}
+                      <button
+                        type="button"
+                        className="font-semibold text-accent hover:underline"
+                        onClick={() => snapsQ.refetch()}
+                      >
+                        Tentar novamente
+                      </button>
+                    </td>
+                  </tr>
+                )}
+                {!snapsQ.isLoading &&
+                  !snapsQ.isError &&
+                  completeSnapshots.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        className="px-5 py-10 text-center text-ink-dim"
+                      >
+                        Ainda não há coletas concluídas entre as 200 mais
+                        recentes.
+                      </td>
+                    </tr>
+                  )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="card">
+          <p className="stat-k">Volume observado</p>
+          <h2 className="mt-1 font-display text-xl font-bold tracking-tight">
+            Registros por coleta
+          </h2>
+          {snapsQ.isError ? (
+            <div className="flex h-56 items-center text-sm text-ink-dim">
+              Não foi possível carregar o volume das coletas.
+            </div>
+          ) : (
+            <SnapshotsChart snapshots={completeSnapshots} />
+          )}
+          <p className="text-sm leading-6 text-ink-dim">
+            O gráfico considera somente coletas concluídas entre os 200
+            snapshots carregados nesta página.
+          </p>
+        </div>
+      </section>
+
+      <section className="container-app py-8">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="stat-k mb-2">Catálogo</p>
+            <h2 className="font-display text-2xl font-bold tracking-tight">
+              Fontes disponíveis
+            </h2>
+          </div>
+          {latestComplete && (
+            <p className="text-sm text-ink-dim">
+              Última coleta concluída: {formatDate(latestComplete.collected_at)}
+            </p>
+          )}
+        </div>
+        {sourcesQ.isError ? (
+          <p className="mt-5 card text-sm text-ink-dim">
+            Não foi possível carregar o catálogo de fontes.{" "}
+            <button
+              type="button"
+              className="font-semibold text-accent hover:underline"
+              onClick={() => sourcesQ.refetch()}
+            >
+              Tentar novamente
+            </button>
+          </p>
+        ) : (
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {sources.map((source) => (
+              <Link
+                key={source.id}
+                to={`/sources/${source.id}`}
+                className="card group hover:border-accent"
+              >
+                <Database className="size-5 text-accent" />
+                <p className="mt-4 font-mono text-xs text-ink-dim">
+                  {source.id}
+                </p>
+                <h3 className="mt-1 font-semibold group-hover:text-accent">
+                  {source.name}
+                </h3>
+                {source.description && (
+                  <p className="mt-2 line-clamp-3 text-sm leading-6 text-ink-dim">
+                    {source.description}
+                  </p>
+                )}
+              </Link>
+            ))}
+            {!sourcesQ.isLoading && sources.length === 0 && (
+              <p className="card text-sm text-ink-dim">
+                Nenhuma fonte está disponível no catálogo neste momento.
+              </p>
+            )}
           </div>
         )}
       </section>
+    </div>
+  );
+}
 
-      {/* Use cases — what citizens can do */}
-      <section className="container-app py-8">
-        <h2 className="text-xl font-semibold mb-4">O que você pode fazer aqui</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <UseCase
-            Icon={Search}
-            title="Buscar uma empresa"
-            body="Digite um CNPJ ou nome no rastreador e veja todos os contratos públicos federais, estaduais e municipais que ela já fechou."
-            cta="Ir ao rastreador"
-            to="/gastos"
-          />
-          <UseCase
-            Icon={AlertTriangle}
-            title="Verificar impedimentos"
-            body="Cruzamos automaticamente CEIS e CNEP com os contratos. Quando uma empresa em lista de impedidos aparece num contrato, fica marcada em vermelho."
-            cta="Ver fornecedores sancionados"
-            to="/gastos"
-          />
-          <UseCase
-            Icon={CheckIcon}
-            title="Auditar uma mudança"
-            body="Cada coleta é hashada e ancorada em Bitcoin. Se um dado oficial mudar amanhã, dá pra provar criptograficamente como estava ontem."
-            cta="Como funciona"
-            to="/about"
-          />
-        </div>
-      </section>
-
-      {/* Technical/observability section — for journalists and researchers */}
-      <section className="container-app py-8 border-t border-ink/10">
-        <div className="text-[0.72rem] font-mono uppercase tracking-widest text-ink-dim mb-2">
-          Para jornalistas e pesquisadores
-        </div>
-        <h2 className="text-xl font-semibold mb-3">A infraestrutura por trás dos números</h2>
-        <p className="text-ink-dim max-w-3xl mb-6">
-          Todos os dados são coletados de APIs oficiais, hashados e ancorados em
-          Bitcoin via{" "}
-          <a
-            className="underline hover:text-accent"
-            href="https://opentimestamps.org"
-            target="_blank"
-            rel="noopener"
-          >
-            OpenTimestamps
-          </a>
-          . Você pode baixar a prova e verificar offline — sem confiar neste
-          servidor continuar no ar.
-        </p>
-
-        {/* Stats grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-          <Stat k="Fontes monitoradas" v={formatNumber(sources.length)} sub="portais oficiais" />
-          <Stat
-            k="Snapshots persistidos"
-            v={formatNumber(snapshots.length)}
-            sub={`${totalAnchored} com raiz merkle`}
-          />
-          <Stat
-            k="Registros arquivados"
-            v={formatNumber(totalEvents)}
-            sub="eventos individuais"
-          />
-          <Stat
-            k="Última coleta"
-            v={latest ? formatDate(latest.collected_at).split(",")[0] : "—"}
-            sub={latest ? `fonte: ${latest.source_id}` : "aguardando"}
-          />
-        </div>
-
-        <div className="flex flex-wrap gap-3 items-center">
-          <Link to="/recent" className="btn">
-            <Zap className="size-4" /> Mudanças recentes
-          </Link>
-          <a
-            className="btn"
-            href="https://github.com/gmowses/fepublica"
-            target="_blank"
-            rel="noopener"
-          >
-            <Download className="size-4" /> Código no GitHub
-          </a>
-          {healthQ.data && (
-            <span className="chip">
-              <Check className="size-3" /> uptime {healthQ.data.uptime}
+function PreservationFlow() {
+  const steps = [
+    ["Fonte", "Coleta em API oficial"],
+    ["Registro", "Conteúdo canônico recebe hash"],
+    ["Conjunto", "Raiz Merkle reúne os registros"],
+    ["Tempo", "Prova pode ser submetida a carimbos de tempo"],
+  ];
+  return (
+    <aside className="border-l-2 border-accent bg-bg-soft px-5 py-5">
+      <p className="stat-k text-accent">Da fonte à prova</p>
+      <p className="mt-2 text-sm leading-6 text-ink-dim">
+        Um resumo do processo de preservação. A raiz Merkle, sozinha, não
+        confirma uma âncora em Bitcoin.
+      </p>
+      <ol className="mt-5 space-y-4">
+        {steps.map(([title, detail], index) => (
+          <li key={title} className="grid grid-cols-[1.5rem_1fr] gap-3">
+            <span className="font-mono text-xs text-accent">0{index + 1}</span>
+            <span>
+              <strong className="block text-sm">{title}</strong>
+              <span className="text-sm text-ink-dim">{detail}</span>
             </span>
-          )}
-        </div>
-      </section>
-
-      {/* Stats grid */}
-      <section className="container-app py-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Stat k="Fontes monitoradas" v={formatNumber(sources.length)} sub="portais oficiais" />
-          <Stat
-            k="Snapshots persistidos"
-            v={formatNumber(snapshots.length)}
-            sub={`${totalAnchored} com raiz merkle`}
-          />
-          <Stat
-            k="Registros arquivados"
-            v={formatNumber(totalEvents)}
-            sub="eventos individuais"
-          />
-          <Stat
-            k="Última coleta"
-            v={latest ? formatDate(latest.collected_at).split(",")[0] : "—"}
-            sub={latest ? `fonte: ${latest.source_id}` : "aguardando"}
-          />
-        </div>
-      </section>
-
-      {/* Map + chart */}
-      <section className="container-app py-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <div className="stat-k">Cobertura geográfica</div>
-              <div className="text-lg font-semibold mt-1">
-                Estados com dados arquivados
-              </div>
-            </div>
-            <BarChart3 className="size-5 text-accent" />
-          </div>
-          <BrazilMap />
-          <p className="text-xs text-ink-dim mt-2">
-            Mapa preliminar: mostra todas as unidades federativas. Segmentação
-            automática por UF baseada em eventos coletados será ligada em v0.2
-            quando os metadados estiverem indexados.
-          </p>
-        </div>
-        <div className="card">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <div className="stat-k">Volume por snapshot</div>
-              <div className="text-lg font-semibold mt-1">
-                Registros arquivados ao longo do tempo
-              </div>
-            </div>
-            <BarChart3 className="size-5 text-accent" />
-          </div>
-          <SnapshotsChart snapshots={snapshots} />
-          <p className="text-xs text-ink-dim mt-2">
-            Cada barra é um snapshot — uma coleta pontual de uma fonte. A
-            altura representa quantos registros foram arquivados e hasheados
-            naquele momento.
-          </p>
-        </div>
-      </section>
-
-      {/* Sources */}
-      <section className="container-app py-6">
-        <h2 className="text-xl font-semibold mb-3">Fontes monitoradas</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {sources.map((s) => (
-            <Link
-              key={s.id}
-              to={`/sources/${s.id}`}
-              className="card hover:border-accent transition"
-            >
-              <div className="stat-k">{s.id}</div>
-              <div className="font-semibold mt-1">{s.name}</div>
-              <div className="text-sm text-ink-dim mt-2 line-clamp-3">
-                {s.description}
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* Snapshots table */}
-      <section className="container-app py-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xl font-semibold">Snapshots recentes</h2>
-          <Link to="/recent" className="text-sm text-ink-dim hover:text-accent">
-            ver mudanças recentes →
-          </Link>
-        </div>
-        <div className="card overflow-x-auto p-0">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wider text-ink-dim">
-              <tr>
-                <th className="px-4 py-3">id</th>
-                <th className="px-4 py-3">fonte</th>
-                <th className="px-4 py-3">coletado em</th>
-                <th className="px-4 py-3 text-right">registros</th>
-                <th className="px-4 py-3">raiz merkle</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {snapshots.slice(0, 20).map((s) => (
-                <tr key={s.id} className="border-t border-ink/10">
-                  <td className="px-4 py-3 font-mono">
-                    <Link
-                      to={`/snapshots/${s.id}`}
-                      className="hover:text-accent"
-                    >
-                      #{s.id}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">{s.source_id}</td>
-                  <td className="px-4 py-3 text-ink-dim">
-                    {formatDate(s.collected_at)}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {formatNumber(s.record_count)}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-ink-dim">
-                    {s.merkle_root ? (
-                      <span className="chip chip-ok">
-                        {shortHash(s.merkle_root, 12)}
-                      </span>
-                    ) : (
-                      <span className="chip chip-warn">pendente</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link
-                      to={`/snapshots/${s.id}`}
-                      className="text-accent hover:underline inline-flex items-center gap-1"
-                    >
-                      <FileSearch className="size-4" /> explorar
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-              {snapshots.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-4 py-10 text-center text-ink-dim"
-                  >
-                    Ainda sem snapshots. A primeira coleta programada acontece
-                    às 04:00 BRT.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
+          </li>
+        ))}
+      </ol>
+    </aside>
   );
 }
 
-function Stat({ k, v, sub }: { k: string; v: string; sub?: string }) {
+function Overview({ k, v, sub }: { k: string; v: string; sub: string }) {
   return (
-    <div className="card">
-      <div className="stat-k">{k}</div>
-      <div className="stat-v">{v}</div>
-      {sub && <div className="text-xs text-ink-dim mt-1">{sub}</div>}
-    </div>
-  );
-}
-
-function BigStat({ k, v, Icon }: { k: string; v: string; Icon: any }) {
-  return (
-    <div className="card">
-      <div className="flex items-center justify-between">
-        <div className="stat-k">{k}</div>
-        <Icon className="size-4 text-accent" />
-      </div>
-      <div className="stat-v text-2xl md:text-3xl">{v}</div>
+    <div>
+      <p className="stat-k">{k}</p>
+      <p className="stat-v text-3xl">{v}</p>
+      <p className="mt-1 text-sm text-ink-dim">{sub}</p>
     </div>
   );
 }
 
 function UseCase({
-  Icon,
+  icon: Icon,
   title,
   body,
-  cta,
   to,
+  cta,
 }: {
-  Icon: any;
+  icon: typeof Search;
   title: string;
   body: string;
-  cta: string;
   to: string;
+  cta: string;
 }) {
   return (
-    <Link to={to} className="card hover:border-accent transition group">
-      <Icon className="size-6 text-accent" />
-      <div className="font-semibold mt-3">{title}</div>
-      <p className="text-sm text-ink-dim mt-2">{body}</p>
-      <div className="text-sm text-accent mt-3 inline-flex items-center gap-1 group-hover:gap-2 transition-all">
-        {cta} <ArrowRight className="size-3" />
-      </div>
+    <Link to={to} className="card group">
+      <Icon className="size-5 text-accent" />
+      <h3 className="mt-5 font-display text-xl font-bold tracking-tight">
+        {title}
+      </h3>
+      <p className="mt-2 text-sm leading-6 text-ink-dim">{body}</p>
+      <span className="mt-5 inline-flex items-center gap-1 text-sm font-semibold text-accent group-hover:underline">
+        {cta} <ArrowRight className="size-4" />
+      </span>
     </Link>
   );
-}
-
-function CheckIcon(props: { className?: string }) {
-  return <Check {...props} />;
 }

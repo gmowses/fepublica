@@ -77,9 +77,10 @@ func (*MastodonChannel) formatStatus(e *store.ChangeEvent) string {
 	}[e.ChangeType]
 
 	sev := ""
-	if e.Severity == "warn" {
+	switch e.Severity {
+	case "warn":
 		sev = " ⚠️"
-	} else if e.Severity == "alert" {
+	case "alert":
 		sev = " 🚨"
 	}
 

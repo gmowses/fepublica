@@ -1,130 +1,57 @@
-# Deploy — Fé Pública
+# Deploy em Docker Swarm
 
-This directory holds the production deployment recipe for the canonical
-Fé Pública instance at `https://fepublica.gmowses.cloud`.
+Este diretório contém os artefatos de produção para uma VPS com Docker Swarm e Traefik. O stack não cria domínio, DNS, credenciais ou serviços externos.
 
-The target is a single VPS already running Traefik as a reverse proxy on a
-shared Docker network called `proxy`. If your infrastructure differs, adjust
-`compose/docker-compose.prod.yml` accordingly.
+[`compose/docker-stack.yml`](./compose/docker-stack.yml) cria Postgres privado, API e workers de processamento. Sem chave do Portal da Transparência, o coletor agenda somente PNCP; CEIS, CNEP e cartões são bloqueados no código.
 
-## Prerequisites on the VPS
+## Pré-requisitos
 
-- Docker Engine 24+
-- Docker Compose v2
-- A running Traefik instance attached to a Docker network named `proxy`
-- Traefik entrypoint named `websecure` with a cert resolver named `letsencrypt`
-- DNS `A` record pointing `fepublica.gmowses.cloud` to the VPS public IP
-- Outbound HTTPS access to:
-  - `api.portaldatransparencia.gov.br` (collector)
-  - `*.btc.calendar.opentimestamps.org` (anchor)
-  - `finney.calendar.eternitywall.com` (anchor)
+- Docker 29+ com Swarm ativo no manager.
+- Rede overlay externa `traefik-public` e Traefik com provider Swarm, entrypoints `web` e `websecure`, e resolver `letsencrypt`.
+- Um diretório de release local ao manager, que contenha `db/migrations`.
+- O domínio planejado é `fepublica.mowses.dev.br`, mas o DNS A ainda precisa apontar para a VPS. O stack exige `FEPUBLICA_DOMAIN` e não possui domínio padrão embutido.
 
-## First-time setup
+## Preparação do release
+
+No manager, dentro do checkout que será usado como release:
 
 ```bash
-sudo mkdir -p /opt/fepublica
-sudo chown $USER:$USER /opt/fepublica
-cd /opt/fepublica
+export FEPUBLICA_RELEASE_DIR="$PWD"
+export FEPUBLICA_DOMAIN=fepublica.mowses.dev.br
+export POSTGRES_PASSWORD="$(openssl rand -base64 32)"
+export FEPUBLICA_IMAGE_PREFIX=fepublica
+export FEPUBLICA_IMAGE_VERSION=1.6.0
 
-git clone https://github.com/gmowses/fepublica .
-
-cp .env.example .env
-# Edit .env and set:
-#   POSTGRES_PASSWORD=<strong random value>
-#   TRANSPARENCIA_API_KEY=<your Portal da Transparência token>
-chmod 600 .env
-
-docker compose \
-  -f docker-compose.yml \
-  -f deploy/compose/docker-compose.prod.yml \
-  build
-
-docker compose \
-  -f docker-compose.yml \
-  -f deploy/compose/docker-compose.prod.yml \
-  up -d postgres
-
-# Wait a few seconds for Postgres to initialize (schema is applied automatically
-# from db/migrations by the entrypoint).
-sleep 10
-
-docker compose \
-  -f docker-compose.yml \
-  -f deploy/compose/docker-compose.prod.yml \
-  up -d api anchor
+for target in api anchor collector contratos-indexer ceap-indexer cartoes-indexer driftd forenses-runner; do
+  docker build --build-arg TARGET="$target" --build-arg VERSION="$FEPUBLICA_IMAGE_VERSION" \
+    -t "$FEPUBLICA_IMAGE_PREFIX/$target:$FEPUBLICA_IMAGE_VERSION" .
+done
 ```
 
-The collector is deliberately **not** started on first boot — it runs a long
-initial fetch and you should trigger the first run manually so you can watch
-the logs:
+As imagens são locais ao manager; os serviços têm `node.role == manager` como restrição. Para evitar tentativa de resolver imagem em registry inexistente, use `--resolve-image never` no deploy.
+
+Antes de executar qualquer deploy, revise as variáveis acima e confirme que o domínio, a senha e o diretório de release são os desejados.
 
 ```bash
-docker compose \
-  -f docker-compose.yml \
-  -f deploy/compose/docker-compose.prod.yml \
-  run --rm collector run --source cnep
+docker stack deploy --resolve-image never \
+  -c deploy/compose/docker-stack.yml fepublica
 ```
 
-Then enable the scheduled collector:
+O bind de migrations é somente leitura e o entrypoint oficial do Postgres só o processa ao inicializar um volume vazio. Ele não reaplica migrations em um volume já existente.
+
+## Verificação
+
+Após deploy autorizado, use o domínio configurado:
 
 ```bash
-docker compose \
-  -f docker-compose.yml \
-  -f deploy/compose/docker-compose.prod.yml \
-  up -d collector
+docker service ls
+docker service ps fepublica_api
+docker service ps fepublica_postgres
+curl --fail --silent --show-error "https://$FEPUBLICA_DOMAIN/api/health"
 ```
 
-## Verification
+O endpoint Prometheus fica em `127.0.0.1:9090` dentro do contêiner da API e não recebe rota Traefik pública.
 
-```bash
-curl -s https://fepublica.gmowses.cloud/health | jq .
-curl -s https://fepublica.gmowses.cloud/sources | jq .
-curl -s https://fepublica.gmowses.cloud/snapshots | jq .
-```
+## Backup
 
-## Updating
-
-```bash
-cd /opt/fepublica
-git pull
-docker compose \
-  -f docker-compose.yml \
-  -f deploy/compose/docker-compose.prod.yml \
-  build
-
-docker compose \
-  -f docker-compose.yml \
-  -f deploy/compose/docker-compose.prod.yml \
-  up -d
-```
-
-## Logs
-
-```bash
-docker compose logs -f api
-docker compose logs -f collector
-docker compose logs -f anchor
-```
-
-## Upgrading OTS receipts
-
-Calendars take a few hours (up to ~24h) to commit their aggregation batch to
-Bitcoin. Once that's happened, the anchor worker's internal upgrade routine
-will fetch the upgraded receipts on its next run.
-
-If you want to force an immediate upgrade pass:
-
-```bash
-docker compose \
-  -f docker-compose.yml \
-  -f deploy/compose/docker-compose.prod.yml \
-  run --rm anchor --once
-```
-
-## Backups
-
-The Postgres volume `fepublica_postgres_data` is the only stateful asset. Back
-it up with your usual VPS backup tooling (rsnapshot, restic, borg, etc).
-Losing the volume does not destroy the anchored proofs (they are in Bitcoin),
-but it does destroy the index from external_id to proof, which is expensive
-to rebuild (you'd need to re-crawl every snapshot).
+[`../scripts/backup.sh`](../scripts/backup.sh) seleciona o contêiner do serviço Swarm `fepublica_postgres` pelo label exato, grava um dump atomicamente, executa `pg_restore --list` antes de publicá-lo e remove somente dumps próprios com mais de 14 dias. Defina `FEPUBLICA_BACKUP_DIR` se `/var/backups/fepublica` não for o destino desejado.

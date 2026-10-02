@@ -57,10 +57,14 @@ func (s *Store) ListUnindexedPNCPEvents(ctx context.Context, limit int) ([]Event
 	rows, err := s.pool.Query(ctx, `
 		SELECT e.id, e.snapshot_id, e.source_id, e.external_id, e.content_hash, e.canonical_json, e.collected_at
 		FROM events e
+		JOIN snapshots s ON s.id = e.snapshot_id AND s.lifecycle_status = 'complete'
 		LEFT JOIN contratos c ON c.event_id = e.id
+		LEFT JOIN projection_failures pf ON pf.event_id = e.id
+			AND pf.projection = 'contratos' AND pf.resolved_at IS NULL
 		WHERE e.source_id = 'pncp-contratos'
 		  AND c.id IS NULL
 		  AND e.canonical_json IS NOT NULL
+		  AND (pf.event_id IS NULL OR (pf.terminal_at IS NULL AND pf.next_retry_at <= NOW()))
 		ORDER BY e.id ASC
 		LIMIT $1
 	`, limit)
@@ -82,16 +86,16 @@ func (s *Store) ListUnindexedPNCPEvents(ctx context.Context, limit int) ([]Event
 
 // ContratoSummary is the card shape for list views.
 type ContratoSummary struct {
-	ID                int64
-	ExternalID        string
-	OrgaoCNPJ         string
-	OrgaoRazaoSocial  string
-	UF                string
-	FornecedorNI      string
-	FornecedorNome    string
-	ValorGlobal       *float64
-	DataAssinatura    *time.Time
-	ObjetoContrato    string
+	ID               int64
+	ExternalID       string
+	OrgaoCNPJ        string
+	OrgaoRazaoSocial string
+	UF               string
+	FornecedorNI     string
+	FornecedorNome   string
+	ValorGlobal      *float64
+	DataAssinatura   *time.Time
+	ObjetoContrato   string
 	// FornecedorSancionado is true if the fornecedor_ni matches any CEIS or
 	// CNEP record by content_hash presence. Cheap LEFT JOIN indicator.
 	FornecedorSancionado bool
@@ -99,13 +103,13 @@ type ContratoSummary struct {
 
 // ListContratosParams filters the contratos listing.
 type ListContratosParams struct {
-	Search    string // ILIKE across fornecedor_nome, orgao_razao_social, objeto_contrato
-	UF        string
-	MinValor  float64
-	MaxValor  float64
-	Limit     int
-	Offset    int
-	OrderBy   string // "valor_desc", "data_desc" (default)
+	Search   string // ILIKE across fornecedor_nome, orgao_razao_social, objeto_contrato
+	UF       string
+	MinValor float64
+	MaxValor float64
+	Limit    int
+	Offset   int
+	OrderBy  string // "valor_desc", "data_desc" (default)
 }
 
 // ListContratos returns a page of contratos with basic filters.
@@ -136,7 +140,7 @@ func (s *Store) ListContratos(ctx context.Context, p ListContratosParams) ([]Con
 	where := strings.Join(conds, " AND ")
 
 	var total int
-	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM contratos WHERE "+where, args...).Scan(&total); err != nil {
+	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM current_contratos WHERE "+where, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
@@ -160,7 +164,7 @@ func (s *Store) ListContratos(ctx context.Context, p ListContratosParams) ([]Con
 		            AND c.fornecedor_ni IS NOT NULL
 		          LIMIT 1
 		       ) AS fornecedor_sancionado
-		FROM contratos c
+		FROM current_contratos c
 		WHERE %s
 		ORDER BY %s
 		LIMIT $%d OFFSET $%d
@@ -186,10 +190,10 @@ func (s *Store) ListContratos(ctx context.Context, p ListContratosParams) ([]Con
 
 // GastosStats are the hero numbers for the /gastos landing.
 type GastosStats struct {
-	TotalContratos   int     `json:"total_contratos"`
-	ValorTotalGlobal float64 `json:"valor_total_global"`
-	OrgaosUnicos     int     `json:"orgaos_unicos"`
-	FornecedoresUnicos int   `json:"fornecedores_unicos"`
+	TotalContratos     int     `json:"total_contratos"`
+	ValorTotalGlobal   float64 `json:"valor_total_global"`
+	OrgaosUnicos       int     `json:"orgaos_unicos"`
+	FornecedoresUnicos int     `json:"fornecedores_unicos"`
 }
 
 // GetGastosStats aggregates top-level numbers.
@@ -201,7 +205,7 @@ func (s *Store) GetGastosStats(ctx context.Context) (*GastosStats, error) {
 		  COALESCE(SUM(valor_global), 0),
 		  COUNT(DISTINCT orgao_cnpj),
 		  COUNT(DISTINCT fornecedor_ni)
-		FROM contratos
+		FROM current_contratos
 	`).Scan(&st.TotalContratos, &st.ValorTotalGlobal, &st.OrgaosUnicos, &st.FornecedoresUnicos)
 	if err != nil {
 		return nil, err
@@ -227,7 +231,7 @@ func (s *Store) TopFornecedores(ctx context.Context, limit int) ([]TopRow, error
 		       COALESCE(MIN(fornecedor_nome), '') AS nome,
 		       COUNT(*) AS n,
 		       COALESCE(SUM(valor_global), 0) AS total
-		FROM contratos
+		FROM current_contratos
 		WHERE fornecedor_ni IS NOT NULL
 		GROUP BY fornecedor_ni
 		ORDER BY total DESC NULLS LAST
@@ -258,7 +262,7 @@ func (s *Store) TopOrgaos(ctx context.Context, limit int) ([]TopRow, error) {
 		       COALESCE(MIN(orgao_razao_social), '') AS nome,
 		       COUNT(*) AS n,
 		       COALESCE(SUM(valor_global), 0) AS total
-		FROM contratos
+		FROM current_contratos
 		WHERE orgao_cnpj IS NOT NULL
 		GROUP BY orgao_cnpj
 		ORDER BY total DESC NULLS LAST
@@ -302,7 +306,7 @@ func (s *Store) GetFornecedor(ctx context.Context, ni string) (*FornecedorDetail
 		           AND ev.canonical_json::text ILIKE '%' || $1 || '%'
 		         LIMIT 1
 		       )
-		FROM contratos
+		FROM current_contratos
 		WHERE fornecedor_ni = $1
 	`, ni).Scan(&f.Nome, &f.TotalContratos, &f.ValorTotal, &f.Sancionado)
 	if err != nil {
@@ -324,7 +328,7 @@ func (s *Store) GastosTimeseries(ctx context.Context) ([]TimeseriesPoint, error)
 		SELECT to_char(data_assinatura, 'YYYY-MM-DD') AS d,
 		       COUNT(*) AS n,
 		       COALESCE(SUM(valor_global), 0) AS total
-		FROM contratos
+		FROM current_contratos
 		WHERE data_assinatura IS NOT NULL
 		  AND data_assinatura >= CURRENT_DATE - INTERVAL '90 days'
 		GROUP BY d
@@ -358,7 +362,7 @@ func (s *Store) ListContratosByFornecedor(ctx context.Context, ni string, limit 
 		       valor_global, data_assinatura,
 		       COALESCE(objeto_contrato, ''),
 		       FALSE
-		FROM contratos
+		FROM current_contratos
 		WHERE fornecedor_ni = $1
 		ORDER BY data_assinatura DESC NULLS LAST
 		LIMIT $2

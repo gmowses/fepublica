@@ -22,8 +22,20 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.27.1'
           cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build embedded frontend
+        run: |
+          npm ci --prefix web
+          make web
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
@@ -39,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [api, collector, anchor]
+        target: [api, collector, anchor, contratos-indexer, ceap-indexer, cartoes-indexer, driftd, forenses-runner]
     steps:
       - uses: actions/checkout@v4
 

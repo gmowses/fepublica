@@ -24,6 +24,8 @@ type Worker struct {
 	logger    zerolog.Logger
 }
 
+const maxMerkleLeaves = 200_000
+
 // New creates an anchor Worker.
 func New(s *store.Store, calendars []string, logger zerolog.Logger) *Worker {
 	return &Worker{
@@ -51,28 +53,28 @@ func (w *Worker) RunOnce(ctx context.Context) error {
 }
 
 func (w *Worker) buildPendingRoots(ctx context.Context) error {
-	pending, err := w.store.ListSnapshotsPendingMerkle(ctx, 20)
+	pending, err := w.store.ListSnapshotsPendingMerkle(ctx, 20, maxMerkleLeaves)
 	if err != nil {
 		return fmt.Errorf("anchor: list pending merkle: %w", err)
 	}
 	for _, snap := range pending {
-		events, err := w.store.ListEventsBySnapshot(ctx, snap.ID)
+		if err := validateMerkleLeafCount(snap.ID, snap.RecordCount, snap.RecordCount); err != nil {
+			w.logger.Warn().Err(err).Int64("snapshot_id", snap.ID).Msg("anchor: snapshot skipped")
+			continue
+		}
+		storedLeaves, err := w.store.ListSnapshotHashLeaves(ctx, snap.ID, maxMerkleLeaves)
 		if err != nil {
-			w.logger.Error().Err(err).Int64("snapshot_id", snap.ID).Msg("anchor: load events failed")
+			w.logger.Warn().Err(err).Int64("snapshot_id", snap.ID).Msg("anchor: load snapshot hashes skipped")
 			continue
 		}
-		if len(events) == 0 {
-			w.logger.Warn().Int64("snapshot_id", snap.ID).Msg("anchor: snapshot has no events, skipping")
+		if err := validateMerkleLeafCount(snap.ID, snap.RecordCount, len(storedLeaves)); err != nil {
+			w.logger.Warn().Err(err).Int64("snapshot_id", snap.ID).Msg("anchor: snapshot skipped")
 			continue
 		}
-		leaves := make([][merkle.HashSize]byte, len(events))
-		for i, ev := range events {
-			if len(ev.ContentHash) != merkle.HashSize {
-				return fmt.Errorf("anchor: snapshot %d event %d: content_hash wrong length", snap.ID, ev.ID)
-			}
-			var h [merkle.HashSize]byte
-			copy(h[:], ev.ContentHash)
-			leaves[i] = h
+		leaves, err := merkleLeaves(snap.ID, storedLeaves)
+		if err != nil {
+			w.logger.Warn().Err(err).Int64("snapshot_id", snap.ID).Msg("anchor: snapshot skipped")
+			continue
 		}
 		tree, err := merkle.Build(leaves)
 		if err != nil {
@@ -90,6 +92,30 @@ func (w *Worker) buildPendingRoots(ctx context.Context) error {
 			Msg("anchor: merkle root computed")
 	}
 	return nil
+}
+
+func validateMerkleLeafCount(snapshotID int64, expected, actual int) error {
+	if expected <= 0 {
+		return fmt.Errorf("anchor: snapshot %d has non-positive record count %d", snapshotID, expected)
+	}
+	if expected > maxMerkleLeaves {
+		return fmt.Errorf("anchor: snapshot %d has %d records; maximum is %d", snapshotID, expected, maxMerkleLeaves)
+	}
+	if actual != expected {
+		return fmt.Errorf("anchor: snapshot %d has %d hash leaves; expected %d", snapshotID, actual, expected)
+	}
+	return nil
+}
+
+func merkleLeaves(snapshotID int64, storedLeaves []store.SnapshotHashLeaf) ([][merkle.HashSize]byte, error) {
+	leaves := make([][merkle.HashSize]byte, len(storedLeaves))
+	for i, leaf := range storedLeaves {
+		if len(leaf.ContentHash) != merkle.HashSize {
+			return nil, fmt.Errorf("anchor: snapshot %d hash leaf %d has length %d; expected %d", snapshotID, i, len(leaf.ContentHash), merkle.HashSize)
+		}
+		copy(leaves[i][:], leaf.ContentHash)
+	}
+	return leaves, nil
 }
 
 func (w *Worker) submitMissingAnchors(ctx context.Context) error {
@@ -151,7 +177,7 @@ func (w *Worker) upgradePendingAnchors(ctx context.Context) error {
 		if len(snap.MerkleRoot) != merkle.HashSize {
 			continue
 		}
-		newReceipt, err := w.otsClient.Upgrade(ctx, a.CalendarURL, snap.MerkleRoot)
+		newReceipt, blockHeight, err := w.otsClient.Upgrade(ctx, a.CalendarURL, snap.MerkleRoot)
 		if err != nil {
 			if errors.Is(err, ots.ErrNotReady) {
 				metrics.AnchorUpgradeTotal.WithLabelValues(a.CalendarURL, "not_ready").Inc()
@@ -169,7 +195,7 @@ func (w *Worker) upgradePendingAnchors(ctx context.Context) error {
 				Msg("anchor: upgrade request failed")
 			continue
 		}
-		if err := w.store.MarkAnchorUpgraded(ctx, a.ID, newReceipt, nil); err != nil {
+		if err := w.store.MarkAnchorUpgraded(ctx, a.ID, newReceipt, blockHeight); err != nil {
 			metrics.AnchorUpgradeTotal.WithLabelValues(a.CalendarURL, "persist_error").Inc()
 			w.logger.Error().Err(err).Int64("anchor_id", a.ID).Msg("anchor: mark upgraded failed")
 			continue

@@ -2,7 +2,7 @@
 
 Todos os endpoints são públicos, sem autenticação, sem estado no cliente, e retornam JSON (ou HTML na raiz para browsers).
 
-Base URL da instância oficial: `https://fepublica.gmowses.cloud`
+Base URL da instância oficial: `https://fepublica.mowses.dev.br`
 
 ## Convenções
 
@@ -103,6 +103,8 @@ Quando `upgraded` é `true`, os campos `upgraded_at` e `block_height` estão pre
 ### `GET /snapshots/{id}/diff/{other_id}`
 
 Diferença semântica entre dois snapshots da mesma fonte. Erra com 400 se as fontes forem diferentes.
+Aceita `limit` (default 100, máximo 200) e `offset`; cada categoria usa a
+mesma janela e os totais permanecem em `summary`.
 
 ```json
 {
@@ -110,6 +112,7 @@ Diferença semântica entre dois snapshots da mesma fonte. Erra com 400 se as fo
   "snapshot_a": { "id": 1, "collected_at": "2026-04-01T04:00:00Z", "record_count": 25301 },
   "snapshot_b": { "id": 2, "collected_at": "2026-04-02T04:00:00Z", "record_count": 25298 },
   "summary": { "added": 3, "removed": 6, "changed": 12 },
+  "page": { "limit": 100, "offset": 0 },
   "added":   [ { "external_id": "...", "hash_b": "..." } ],
   "removed": [ { "external_id": "...", "hash_a": "..." } ],
   "changed": [ { "external_id": "...", "hash_a": "...", "hash_b": "..." } ]
@@ -156,9 +159,11 @@ Retorna a prova completa de um evento individual dentro de um snapshot, no forma
 
 Esta é a unidade de verificação — leia [`verification.md`](./verification.md) para detalhes sobre como consumi-la.
 
-### `GET /metrics`
+### Métricas Prometheus
 
-Endpoint Prometheus no formato texto padrão. Métricas expostas:
+As métricas não fazem parte da API pública. O processo `api` as expõe em um
+listener separado, configurado por `METRICS_ADDR` (default `127.0.0.1:9090`).
+Esse listener retorna o formato texto padrão Prometheus:
 
 - `fepublica_collector_runs_total{source,status}` — total de execuções por fonte e resultado.
 - `fepublica_collector_records_total{source}` — total de registros persistidos.
@@ -177,7 +182,7 @@ Rotas no label são normalizadas (ids numéricos viram `{id}`, ids opacos longos
 
 - **400 Bad Request** — parâmetro inválido.
 - **404 Not Found** — recurso inexistente.
-- **409 Conflict** — snapshot ainda sem Merkle root quando prova é solicitada.
+- **409 Conflict** — snapshot ainda não está completo, sem Merkle root, ou a prova não corresponde ao estado persistido.
 - **500 Internal Server Error** — erro inesperado (logs do servidor trazem detalhes).
 
 ## Política de uso

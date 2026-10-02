@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	FindingCEAPSancionado    FindingType = "ceap_sancionado"
-	FindingCEAPConcentracao  FindingType = "ceap_concentracao"
-	FindingFornecedorDuplo   FindingType = "fornecedor_contrato_ceap"
+	FindingCEAPSancionado   FindingType = "ceap_sancionado"
+	FindingCEAPConcentracao FindingType = "ceap_concentracao"
+	FindingFornecedorDuplo  FindingType = "fornecedor_contrato_ceap"
 )
 
 // FindCEAPSancionados cruza CEAP (cota parlamentar) × CEIS/CNEP.
@@ -43,7 +43,7 @@ func (s *Store) FindCEAPSancionados(ctx context.Context, limit int) ([]Finding, 
 			c.tipo_despesa,
 			COUNT(*) AS qtd,
 			SUM(c.valor_liquido) AS total
-		FROM ceap c
+		FROM current_ceap c
 		JOIN sancionados s ON s.ni = c.fornecedor_cnpj
 		WHERE c.fornecedor_cnpj IS NOT NULL
 		  AND c.fornecedor_cnpj <> ''
@@ -98,7 +98,7 @@ func (s *Store) FindCEAPConcentracao(ctx context.Context, limit int) ([]Finding,
 	rows, err := s.pool.Query(ctx, `
 		WITH dep_totals AS (
 			SELECT deputado_nome, SUM(valor_liquido) AS total_dep
-			FROM ceap
+			FROM current_ceap
 			WHERE deputado_nome IS NOT NULL AND valor_liquido IS NOT NULL
 			GROUP BY deputado_nome
 			HAVING SUM(valor_liquido) > 0
@@ -112,7 +112,7 @@ func (s *Store) FindCEAPConcentracao(ctx context.Context, limit int) ([]Finding,
 				COALESCE(c.fornecedor_nome, '') AS fornecedor_nome,
 				COUNT(*) AS qtd,
 				SUM(c.valor_liquido) AS total_par
-			FROM ceap c
+			FROM current_ceap c
 			WHERE c.deputado_nome IS NOT NULL
 			  AND c.fornecedor_cnpj IS NOT NULL
 			  AND c.valor_liquido IS NOT NULL
@@ -162,16 +162,16 @@ func (s *Store) FindCEAPConcentracao(ctx context.Context, limit int) ([]Finding,
 			Valor:    &v,
 			DedupKey: fmt.Sprintf("ceap_concentracao:%s:%s", deputado, fornCNPJ),
 			Evidence: map[string]interface{}{
-				"deputado":          deputado,
-				"partido":           partido,
-				"uf":                uf,
-				"fornecedor_cnpj":   fornCNPJ,
-				"fornecedor_nome":   fornNome,
-				"qtd_notas":         qtd,
-				"total_fornecedor":  totalPar,
-				"total_cota":        totalDep,
-				"share_pct":         share * 100,
-				"explanation":       fmt.Sprintf("O deputado %s (%s/%s) direcionou %.1f%% da cota (R$ %.0f de R$ %.0f total) para %s, em %d notas fiscais. Concentração alta em um único fornecedor pode indicar relação preferencial ou empresa de fachada.", deputado, partido, uf, share*100, totalPar, totalDep, fallback(fornNome, fornCNPJ), qtd),
+				"deputado":         deputado,
+				"partido":          partido,
+				"uf":               uf,
+				"fornecedor_cnpj":  fornCNPJ,
+				"fornecedor_nome":  fornNome,
+				"qtd_notas":        qtd,
+				"total_fornecedor": totalPar,
+				"total_cota":       totalDep,
+				"share_pct":        share * 100,
+				"explanation":      fmt.Sprintf("O deputado %s (%s/%s) direcionou %.1f%% da cota (R$ %.0f de R$ %.0f total) para %s, em %d notas fiscais. Concentração alta em um único fornecedor pode indicar relação preferencial ou empresa de fachada.", deputado, partido, uf, share*100, totalPar, totalDep, fallback(fornNome, fornCNPJ), qtd),
 			},
 		})
 	}
@@ -188,21 +188,32 @@ func (s *Store) FindFornecedorDuplo(ctx context.Context, limit int) ([]Finding, 
 		limit = 50
 	}
 	rows, err := s.pool.Query(ctx, `
+		WITH ceap_totals AS (
+			SELECT
+				fornecedor_cnpj,
+				COALESCE(MIN(fornecedor_nome), '') AS forn_nome,
+				STRING_AGG(DISTINCT deputado_nome || ' (' || partido || '/' || uf || ')', ', ') AS deputados,
+				COUNT(DISTINCT deputado_nome) AS qtd_deputados,
+				SUM(valor_liquido) AS total_ceap
+			FROM current_ceap
+			WHERE fornecedor_cnpj IS NOT NULL AND fornecedor_cnpj <> ''
+			GROUP BY fornecedor_cnpj
+		), contrato_totals AS (
+			SELECT
+				fornecedor_ni,
+				MIN(orgao_razao_social) AS orgao,
+				COUNT(DISTINCT id) AS qtd_contratos,
+				SUM(valor_global) AS total_contratos
+			FROM current_contratos
+			WHERE fornecedor_ni IS NOT NULL AND fornecedor_ni <> ''
+			GROUP BY fornecedor_ni
+		)
 		SELECT
-			ce.fornecedor_cnpj,
-			COALESCE(MIN(ce.fornecedor_nome), '') AS forn_nome,
-			STRING_AGG(DISTINCT ce.deputado_nome || ' (' || ce.partido || '/' || ce.uf || ')', ', ') AS deputados,
-			COUNT(DISTINCT ce.deputado_nome) AS qtd_deputados,
-			SUM(ce.valor_liquido) AS total_ceap,
-			MIN(co.orgao_razao_social) AS orgao,
-			COUNT(DISTINCT co.id) AS qtd_contratos,
-			SUM(co.valor_global) AS total_contratos
-		FROM ceap ce
-		JOIN contratos co ON co.fornecedor_ni = ce.fornecedor_cnpj
-		WHERE ce.fornecedor_cnpj IS NOT NULL
-		  AND ce.fornecedor_cnpj <> ''
-		GROUP BY ce.fornecedor_cnpj
-		ORDER BY SUM(ce.valor_liquido) + COALESCE(SUM(co.valor_global), 0) DESC
+			ce.fornecedor_cnpj, ce.forn_nome, ce.deputados, ce.qtd_deputados,
+			ce.total_ceap, co.orgao, co.qtd_contratos, co.total_contratos
+		FROM ceap_totals ce
+		JOIN contrato_totals co ON co.fornecedor_ni = ce.fornecedor_cnpj
+		ORDER BY ce.total_ceap + COALESCE(co.total_contratos, 0) DESC
 		LIMIT $1
 	`, limit)
 	if err != nil {

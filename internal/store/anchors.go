@@ -118,9 +118,9 @@ func (s *Store) SnapshotsMissingAnchor(ctx context.Context, calendarURL string, 
 	rows, err := s.pool.Query(ctx, `
 		SELECT s.id, s.source_id, s.collected_at, COALESCE(s.api_version, ''),
 		       s.record_count, s.bytes_size, s.merkle_root, s.merkle_computed_at,
-		       s.collector_version, COALESCE(s.notes, '')
+		       s.collector_version, COALESCE(s.notes, ''), s.lifecycle_status
 		FROM snapshots s
-		WHERE s.merkle_root IS NOT NULL
+		WHERE s.merkle_root IS NOT NULL AND s.lifecycle_status = 'complete'
 		  AND NOT EXISTS (
 		      SELECT 1 FROM anchors a
 		      WHERE a.snapshot_id = s.id AND a.calendar_url = $1
@@ -140,7 +140,7 @@ func (s *Store) SnapshotsMissingAnchor(ctx context.Context, calendarURL string, 
 		if err := rows.Scan(
 			&snap.ID, &snap.SourceID, &snap.CollectedAt, &snap.APIVersion,
 			&snap.RecordCount, &snap.BytesSize, &snap.MerkleRoot, &merkleComputed,
-			&snap.CollectorVersion, &snap.Notes,
+			&snap.CollectorVersion, &snap.Notes, &snap.LifecycleStatus,
 		); err != nil {
 			return nil, fmt.Errorf("store: scan snapshot: %w", err)
 		}

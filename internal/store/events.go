@@ -70,15 +70,15 @@ func (s *Store) insertEventsChunk(ctx context.Context, events []InsertEventParam
 	for i := 0; i < len(events); i++ {
 		if _, err := br.Exec(); err != nil {
 			_ = br.Close()
-			return inserted, fmt.Errorf("insert event %d: %w", i, err)
+			return 0, fmt.Errorf("insert event %d: %w", i, err)
 		}
 		inserted++
 	}
 	if err := br.Close(); err != nil {
-		return inserted, fmt.Errorf("close batch: %w", err)
+		return 0, fmt.Errorf("close batch: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return inserted, fmt.Errorf("commit: %w", err)
+		return 0, fmt.Errorf("commit: %w", err)
 	}
 	return inserted, nil
 }

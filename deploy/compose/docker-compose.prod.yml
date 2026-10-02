@@ -20,7 +20,7 @@
 #   - A Traefik instance reachable via the "cloudface_proxy" docker network.
 #   - Traefik configured with an entrypoint "websecure" and a cert resolver
 #     named "letsencrypt" (or adjust labels to match your setup).
-#   - DNS A record: fepublica.gmowses.cloud -> VPS public IP.
+#   - DNS A record: ${FEPUBLICA_DOMAIN:-fepublica.mowses.dev.br} -> VPS public IP.
 
 services:
   postgres:
@@ -29,20 +29,26 @@ services:
 
   api:
     environment:
-      API_BASE_URL: "https://fepublica.gmowses.cloud"
+      API_BASE_URL: "https://${FEPUBLICA_DOMAIN:-fepublica.mowses.dev.br}"
     networks:
       - fepublica_internal
       - cloudface_proxy
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=cloudface_proxy"
-      - "traefik.http.routers.fepublica.rule=Host(`fepublica.gmowses.cloud`)"
+      - "traefik.http.routers.fepublica.rule=Host(`${FEPUBLICA_DOMAIN:-fepublica.mowses.dev.br}`)"
       - "traefik.http.routers.fepublica.entrypoints=websecure"
       - "traefik.http.routers.fepublica.tls.certresolver=letsencrypt"
       - "traefik.http.services.fepublica.loadbalancer.server.port=8080"
       - "traefik.http.middlewares.fepublica-hsts.headers.stsSeconds=31536000"
       - "traefik.http.middlewares.fepublica-hsts.headers.stsIncludeSubdomains=true"
-      - "traefik.http.routers.fepublica.middlewares=fepublica-hsts"
+      - "traefik.http.middlewares.fepublica-security.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.fepublica-security.headers.referrerPolicy=strict-origin-when-cross-origin"
+      - "traefik.http.middlewares.fepublica-security.headers.contentSecurityPolicy=default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'"
+      - "traefik.http.middlewares.fepublica-ratelimit.ratelimit.average=60"
+      - "traefik.http.middlewares.fepublica-ratelimit.ratelimit.burst=120"
+      - "traefik.http.middlewares.fepublica-inflight.inFlightReq.amount=100"
+      - "traefik.http.routers.fepublica.middlewares=fepublica-hsts,fepublica-security,fepublica-ratelimit,fepublica-inflight"
 
 networks:
   cloudface_proxy:

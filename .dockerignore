@@ -1,0 +1,14 @@
+.git
+.env
+.env.*
+!.env.example
+bin
+coverage.out
+tmp
+backups
+*.dump
+web/node_modules
+web/dist
+internal/api/spa
+node_modules
+dist

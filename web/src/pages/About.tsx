@@ -24,15 +24,16 @@ export function About() {
         <p>
           Dados públicos brasileiros mudam e desaparecem silenciosamente.
           Registros são retirados de listas oficiais sem trilha. Contratos
-          recebem emendas retroativas. Jornalistas de investigação, pesquisadores
-          e profissionais de compliance precisam provar "esse dado existia nessa
-          data" e hoje dependem de capturas de tela que são tecnicamente
-          contestáveis.
+          recebem emendas retroativas. Jornalistas de investigação,
+          pesquisadores e profissionais de compliance precisam provar "esse dado
+          existia nessa data" e hoje dependem de capturas de tela que são
+          tecnicamente contestáveis.
         </p>
         <p className="mt-3">
-          O Fé Pública oferece uma alternativa: um arquivo externo, reprodutível,
-          verificável criptograficamente, e que continua válido mesmo que este
-          servidor suma amanhã. A prova mora em Bitcoin.
+          O Fé Pública oferece uma alternativa: um arquivo externo,
+          reprodutível, verificável criptograficamente, e que continua válido
+          mesmo que este servidor suma amanhã. Quando uma prova inclui atestação
+          Bitcoin, ela pode ser verificada fora desta aplicação.
         </p>
       </section>
 
@@ -45,15 +46,16 @@ export function About() {
             rate limits e termos de uso.
           </li>
           <li>
-            <strong>Canonicalizamos</strong> cada registro em JSON determinístico
-            (chaves ordenadas, sem whitespace) e calculamos seu <code>SHA-256</code>.
+            <strong>Canonicalizamos</strong> cada registro em JSON
+            determinístico (chaves ordenadas, sem whitespace) e calculamos seu{" "}
+            <code>SHA-256</code>.
           </li>
           <li>
             <strong>Agrupamos</strong> todos os hashes da coleta em uma{" "}
             <strong>árvore de Merkle</strong>.
           </li>
           <li>
-            <strong>Ancoramos</strong> a raiz da árvore em Bitcoin via{" "}
+            <strong>Submetemos</strong> a raiz da árvore ao{" "}
             <a
               href="https://opentimestamps.org"
               target="_blank"
@@ -62,17 +64,18 @@ export function About() {
             >
               OpenTimestamps
             </a>
-            , que submete o hash a múltiplos calendar servers independentes.
+            , que encaminha o hash a calendar servers. O recibo pode permanecer
+            aguardando atestação Bitcoin.
           </li>
           <li>
             <strong>Servimos provas</strong> completas via API — cada registro
-            pode ser baixado com sua prova de inclusão na árvore e os receipts
-            OpenTimestamps que comprovam a ancoragem em Bitcoin.
+            pode ser baixado com sua prova de inclusão na árvore e, quando
+            houver, seu receipt OpenTimestamps.
           </li>
           <li>
             <strong>Verificação independente</strong>: qualquer pessoa baixa a
-            prova e valida offline com um CLI standalone que não depende do
-            nosso servidor continuar no ar.
+            prova e valida offline com o cliente oficial OpenTimestamps, sem
+            depender deste servidor.
           </li>
         </ol>
       </section>
@@ -81,23 +84,23 @@ export function About() {
         <h2 className="text-xl font-semibold mb-2">O que garantimos</h2>
         <ul className="list-disc pl-5 space-y-2 text-ink">
           <li>
-            <strong>Integridade</strong> — dado um registro e uma prova, qualquer
-            um pode verificar que o registro existia naquele snapshot, exatamente
-            com aquele conteúdo.
+            <strong>Integridade</strong> — dado um registro e uma prova,
+            qualquer um pode verificar que o registro existia naquele snapshot,
+            exatamente com aquele conteúdo.
           </li>
           <li>
-            <strong>Tempo</strong> — uma vez confirmada a transação Bitcoin que
-            ancora a raiz, está estabelecido que o snapshot existia antes daquele
-            bloco — e portanto antes de um momento específico no tempo.
+            <strong>Tempo</strong> — uma prova com atestação Bitcoin verificada
+            no cliente oficial estabelece que o snapshot existia antes daquele
+            bloco.
           </li>
           <li>
-            <strong>Independência</strong> — a verificação não depende do nosso
-            servidor. Se sumirmos amanhã, a prova continua válida enquanto o
-            Bitcoin existir.
+            <strong>Independência</strong> — a prova de inclusão e uma atestação
+            Bitcoin podem ser verificadas sem depender deste servidor.
           </li>
           <li>
-            <strong>Reprodutibilidade</strong> — a política de coleta é pública e
-            versionada. Qualquer um pode rodar uma instância paralela e comparar.
+            <strong>Reprodutibilidade</strong> — a política de coleta é pública
+            e versionada. Qualquer um pode rodar uma instância paralela e
+            comparar.
           </li>
         </ul>
       </section>
@@ -106,26 +109,26 @@ export function About() {
         <h2 className="text-xl font-semibold mb-2">O que não garantimos</h2>
         <ul className="list-disc pl-5 space-y-2 text-ink-dim">
           <li>
-            <strong>Autenticidade da fonte</strong>: arquivamos o que a API oficial
-            retorna. Se o governo publicou um dado errado, arquivamos o erro.
+            <strong>Autenticidade da fonte</strong>: arquivamos o que a API
+            oficial retorna. Se o governo publicou um dado errado, arquivamos o
+            erro.
           </li>
           <li>
             <strong>Completude</strong>: pode haver gaps de coleta por falha de
             API, rate limit, bug. Sempre publicamos nossa cobertura real.
           </li>
           <li>
-            <strong>Interpretação</strong>: não somos fact-checker. Somos arquivo.
+            <strong>Interpretação</strong>: não somos fact-checker. Somos
+            arquivo.
           </li>
         </ul>
       </section>
 
       <section className="mt-8">
-        <h2 className="text-xl font-semibold mb-2">
-          Como verificar uma prova
-        </h2>
+        <h2 className="text-xl font-semibold mb-2">Como verificar uma prova</h2>
         <p className="mb-3">
-          Baixe qualquer prova e valide offline usando o CLI standalone. Binários
-          para macOS, Linux e Windows estão disponíveis nas{" "}
+          Baixe qualquer prova e valide offline usando o CLI standalone.
+          Binários para macOS, Linux e Windows estão disponíveis nas{" "}
           <a
             href="https://github.com/gmowses/fepublica/releases"
             target="_blank"
@@ -139,13 +142,14 @@ export function About() {
         <pre className="bg-bg-soft border border-ink/10 rounded-md p-4 overflow-auto text-[0.78rem] font-mono">
           <Terminal className="size-4 inline text-accent mr-2" />
           <span className="text-ink-dim"># baixar prova</span>
-          {"\n"}curl -s "https://fepublica.gmowses.cloud/api/snapshots/1/events/XXX/proof" {">"} proof.json{"\n\n"}
+          {"\n"}curl -s "/api/snapshots/1/events/XXX/proof" {">"} proof.json
+          {"\n\n"}
           <span className="text-ink-dim"># verificar offline</span>
           {"\n"}./fepublica-verify proof.json{"\n"}
         </pre>
         <p className="text-sm text-ink-dim mt-3">
-          O CLI faz três validações: re-hash do JSON canônico, validação da prova
-          Merkle, e listagem dos receipts OpenTimestamps. Para verificação
+          O CLI faz três validações: re-hash do JSON canônico, validação da
+          prova Merkle, e listagem dos receipts OpenTimestamps. Para verificação
           fim-a-fim até a transação Bitcoin, extraia os receipts e rode{" "}
           <code>ots verify</code> do cliente oficial OpenTimestamps (
           <code>pip install opentimestamps-client</code>).
@@ -157,10 +161,10 @@ export function About() {
         <p>
           Escrito em <strong>Go</strong>, com <strong>Postgres</strong> como
           storage imutável (triggers bloqueiam UPDATE/DELETE em eventos
-          arquivados). Anchoring via <strong>OpenTimestamps</strong> para não ter
-          que operar um full node Bitcoin. Frontend <strong>React + Vite</strong>{" "}
-          servido estático pelo próprio binário Go via <code>embed.FS</code>.
-          Deployed via Docker Compose. Licenciado{" "}
+          arquivados). Anchoring via <strong>OpenTimestamps</strong> para não
+          ter que operar um full node Bitcoin. Frontend{" "}
+          <strong>React + Vite</strong> servido estático pelo próprio binário Go
+          via <code>embed.FS</code>. Deployed via Docker Compose. Licenciado{" "}
           <a
             href="https://github.com/gmowses/fepublica/blob/main/LICENSE"
             target="_blank"

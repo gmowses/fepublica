@@ -10,13 +10,29 @@ jobs:
   test:
     name: test
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: fepublica
+          POSTGRES_PASSWORD: test-password
+          POSTGRES_DB: fepublica
+        options: >-
+          --health-cmd "pg_isready -U fepublica -d fepublica"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      FE_PUBLICA_TEST_DSN: postgres://fepublica:test-password@localhost:5432/fepublica?sslmode=disable
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.27.1'
           cache: true
 
       - name: Verify go.mod is tidy
@@ -38,6 +54,30 @@ jobs:
           go build -trimpath -ldflags "-s -w" -o bin/api       ./cmd/api
           go build -trimpath -ldflags "-s -w" -o bin/verify    ./cmd/verify
 
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: web
+        run: npm run build
+
+      - name: Audit high-severity frontend dependencies
+        working-directory: web
+        run: npm audit --audit-level=high
+
   lint:
     name: lint
     runs-on: ubuntu-latest
@@ -47,13 +87,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.27.1'
           cache: true
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v8
         with:
-          version: v1.60
+          version: v2.13.2
           args: --timeout=5m
 
   docker:

@@ -47,10 +47,14 @@ func (s *Store) ListUnindexedCEAPEvents(ctx context.Context, limit int) ([]Event
 	rows, err := s.pool.Query(ctx, `
 		SELECT e.id, e.snapshot_id, e.source_id, e.external_id, e.content_hash, e.canonical_json, e.collected_at
 		FROM events e
+		JOIN snapshots s ON s.id = e.snapshot_id AND s.lifecycle_status = 'complete'
 		LEFT JOIN ceap c ON c.event_id = e.id
+		LEFT JOIN projection_failures pf ON pf.event_id = e.id
+			AND pf.projection = 'ceap' AND pf.resolved_at IS NULL
 		WHERE e.source_id = 'camara-ceap'
 		  AND c.id IS NULL
 		  AND e.canonical_json IS NOT NULL
+		  AND (pf.event_id IS NULL OR (pf.terminal_at IS NULL AND pf.next_retry_at <= NOW()))
 		ORDER BY e.id ASC
 		LIMIT $1
 	`, limit)
@@ -72,10 +76,10 @@ func (s *Store) ListUnindexedCEAPEvents(ctx context.Context, limit int) ([]Event
 
 // CEAPStats summarizes the CEAP table.
 type CEAPStats struct {
-	TotalDespesas    int64   `json:"total_despesas"`
-	ValorTotal       float64 `json:"valor_total"`
-	DeputadosUnicos  int64   `json:"deputados_unicos"`
-	FornecedoresUnicos int64 `json:"fornecedores_unicos"`
+	TotalDespesas      int64   `json:"total_despesas"`
+	ValorTotal         float64 `json:"valor_total"`
+	DeputadosUnicos    int64   `json:"deputados_unicos"`
+	FornecedoresUnicos int64   `json:"fornecedores_unicos"`
 }
 
 func (s *Store) GetCEAPStats(ctx context.Context) (*CEAPStats, error) {
@@ -86,8 +90,7 @@ func (s *Store) GetCEAPStats(ctx context.Context) (*CEAPStats, error) {
 			COALESCE(SUM(valor_liquido), 0),
 			COUNT(DISTINCT deputado_id),
 			COUNT(DISTINCT fornecedor_cnpj)
-		FROM ceap
+		FROM current_ceap
 	`).Scan(&st.TotalDespesas, &st.ValorTotal, &st.DeputadosUnicos, &st.FornecedoresUnicos)
 	return &st, err
 }
-

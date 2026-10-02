@@ -6,7 +6,7 @@ Obrigado pelo interesse. Este documento explica como rodar o projeto localmente,
 
 ### Pré-requisitos
 
-- Go 1.23+
+- Go 1.25+ (the module selects toolchain Go 1.27.1)
 - Docker e Docker Compose
 - Um token da API do Portal da Transparência. Cadastre-se em https://portaldatransparencia.gov.br/api-de-dados/cadastrar-email — o token chega por email.
 
@@ -101,4 +101,4 @@ A instância oficial em `fepublica.gmowses.cloud` é o ambiente de referência. 
 
 ## Contato
 
-Abra uma issue. Para assuntos sensíveis (vazamento de chave, problema de privacidade, etc.), contate o mantenedor diretamente via email listado no perfil do mantenedor no GitHub.
+Abra uma issue para assuntos públicos. Para vulnerabilidades, siga o processo em [SECURITY.md](./SECURITY.md).

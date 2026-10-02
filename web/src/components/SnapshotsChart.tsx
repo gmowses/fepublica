@@ -11,9 +11,9 @@ import {
 import type { Snapshot } from "../lib/api";
 
 const sourceColors: Record<string, string> = {
-  ceis: "#ffd166",
-  cnep: "#4cc9a3",
-  "pncp-contratos": "#ef476f",
+  ceis: "rgb(var(--color-accent))",
+  cnep: "rgb(var(--color-ok))",
+  "pncp-contratos": "rgb(var(--color-danger))",
 };
 
 export function SnapshotsChart({ snapshots }: { snapshots: Snapshot[] }) {
@@ -38,29 +38,35 @@ export function SnapshotsChart({ snapshots }: { snapshots: Snapshot[] }) {
   return (
     <div className="h-56">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#232b3b" />
+        <BarChart
+          data={data}
+          margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
+        >
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke="rgb(var(--color-border))"
+          />
           <XAxis
             dataKey="id"
-            tick={{ fontSize: 11, fill: "#8b98a9" }}
-            stroke="#8b98a9"
+            tick={{ fontSize: 11, fill: "rgb(var(--color-ink-dim))" }}
+            stroke="rgb(var(--color-ink-dim))"
           />
           <YAxis
-            tick={{ fontSize: 11, fill: "#8b98a9" }}
-            stroke="#8b98a9"
+            tick={{ fontSize: 11, fill: "rgb(var(--color-ink-dim))" }}
+            stroke="rgb(var(--color-ink-dim))"
             tickFormatter={(v) =>
               v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)
             }
           />
           <Tooltip
             contentStyle={{
-              background: "#11161f",
-              border: "1px solid #232b3b",
+              background: "rgb(var(--color-bg-card))",
+              border: "1px solid rgb(var(--color-border))",
               borderRadius: 6,
               fontSize: 12,
-              color: "#e6edf3",
+              color: "rgb(var(--color-ink))",
             }}
-            labelStyle={{ color: "#ffd166" }}
+            labelStyle={{ color: "rgb(var(--color-accent))" }}
             formatter={(v: number, _name: string, props: any) => [
               v.toLocaleString("pt-BR") + " registros",
               props.payload.source + " · " + props.payload.collected,
@@ -68,7 +74,10 @@ export function SnapshotsChart({ snapshots }: { snapshots: Snapshot[] }) {
           />
           <Bar dataKey="count" radius={[4, 4, 0, 0]}>
             {data.map((d, i) => (
-              <Cell key={i} fill={sourceColors[d.source] ?? "#ffd166"} />
+              <Cell
+                key={i}
+                fill={sourceColors[d.source] ?? "rgb(var(--color-accent))"}
+              />
             ))}
           </Bar>
         </BarChart>

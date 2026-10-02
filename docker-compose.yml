@@ -12,7 +12,7 @@ x-common-env: &common-env
   POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
   POSTGRES_PORT: ${POSTGRES_PORT:-5432}
   POSTGRES_USER: ${POSTGRES_USER:-fepublica}
-  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_real_deployments}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
   POSTGRES_DB: ${POSTGRES_DB:-fepublica}
   POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-disable}
   TRANSPARENCIA_API_KEY: ${TRANSPARENCIA_API_KEY}
@@ -26,7 +26,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-fepublica}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_real_deployments}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-fepublica}
     volumes:
       - postgres_data:/var/lib/postgresql/data

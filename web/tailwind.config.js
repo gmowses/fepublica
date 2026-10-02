@@ -6,28 +6,26 @@ export default {
     extend: {
       colors: {
         bg: {
-          DEFAULT: "#0b0f17",
-          soft: "#11161f",
-          card: "#161c28",
+          DEFAULT: "rgb(var(--color-bg) / <alpha-value>)",
+          soft: "rgb(var(--color-bg-soft) / <alpha-value>)",
+          card: "rgb(var(--color-bg-card) / <alpha-value>)",
         },
         ink: {
-          DEFAULT: "#e6edf3",
-          dim: "#8b98a9",
+          DEFAULT: "rgb(var(--color-ink) / <alpha-value>)",
+          dim: "rgb(var(--color-ink-dim) / <alpha-value>)",
         },
-        accent: "#ffd166",
-        ok: "#4cc9a3",
-        danger: "#ef476f",
-        warn: "#f8961e",
+        accent: "rgb(var(--color-accent) / <alpha-value>)",
+        ok: "rgb(var(--color-ok) / <alpha-value>)",
+        danger: "rgb(var(--color-danger) / <alpha-value>)",
+        warn: "rgb(var(--color-warn) / <alpha-value>)",
       },
       fontFamily: {
-        sans: [
-          "-apple-system",
-          "BlinkMacSystemFont",
-          "Segoe UI",
-          "Roboto",
-          "Inter",
-          "Helvetica",
-          "Arial",
+        sans: ["IBM Plex Sans", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: [
+          "Archivo",
+          "IBM Plex Sans",
+          "ui-sans-serif",
+          "system-ui",
           "sans-serif",
         ],
         mono: [

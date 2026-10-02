@@ -101,9 +101,9 @@ func (s *Seeder) Run(ctx context.Context, federalYAMLPath string) error {
 // seedUFs inserts the 26 states + DF.
 func (s *Seeder) seedUFs(ctx context.Context) error {
 	ufs := []struct {
-		Sigla     string
-		Nome      string
-		IBGECode  string
+		Sigla    string
+		Nome     string
+		IBGECode string
 	}{
 		{"AC", "Acre", "12"},
 		{"AL", "Alagoas", "27"},

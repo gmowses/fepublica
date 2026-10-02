@@ -1,29 +1,37 @@
-# LinkedIn — PT-BR (executivo)
+# LinkedIn — PT-BR (rascunho de lançamento v1.6.0)
 
-> Publicar como post simples, sem capa. Comprimento ~ 1900 caracteres,
-> dentro do limite. Tom: técnico-executivo, sem hype.
+> Publicar somente após o DNS de `fepublica.mowses.dev.br` estar configurado e a instância ser verificada. Este texto não autoriza publicação automática.
 
----
+Um dado público mudou. Como demonstrar qual conteúdo você havia preservado antes da mudança?
 
-Lancei o **Fé Pública** — um arquivo verificável dos dados públicos brasileiros, ancorado em Bitcoin.
+Essa é a pergunta por trás do Fé Pública, um projeto aberto que estou desenvolvendo para preservar e consultar dados públicos brasileiros.
 
-🔗 https://fepublica.gmowses.cloud
-💾 https://github.com/gmowses/fepublica
+O funcionamento tem quatro etapas:
 
-A motivação é simples: dados públicos no Brasil mudam silenciosamente. Empresas saem da lista de impedidos sem aviso. Contratos somem. Documentos viram 404. Quando alguém percebe, não tem mais como provar como estava antes.
+1. Coletar registros de APIs oficiais e preservar uma versão da coleta.
+2. Representar cada registro de forma determinística e calcular seu hash SHA-256.
+3. Reunir os hashes em uma árvore de Merkle. Isso permite demonstrar que um registro pertence à coleta sem baixar todos os outros.
+4. Submeter a raiz ao OpenTimestamps. Quando a prova temporal está completa e é verificada contra o Bitcoin, ela permite demonstrar que aquele compromisso criptográfico já existia antes do bloco correspondente.
 
-O Fé Pública resolve isso fazendo três coisas:
+A aplicação também permite consultar gastos, comparar coletas e examinar cruzamentos entre bases. Os resultados são pontos de partida para investigação; não são conclusões automáticas sobre irregularidades.
 
-**1. Coleta** automaticamente CEIS, CNEP, contratos do PNCP e transações do CPGF (cartão corporativo do governo federal). Hoje são ~27 mil registros de empresas sancionadas, 1.616 contratos públicos rastreados (R$ 47M+) e snapshots mensais do cartão corporativo.
+Na versão 1.6, uma revisão externa de segurança motivou correções e uma revisão mais ampla do projeto:
 
-**2. Sela criptograficamente** cada coleta. Toda snapshot vira uma árvore de Merkle, e a raiz é ancorada em Bitcoin via OpenTimestamps. Se um dado oficial mudar amanhã, dá pra provar como estava ontem — sem precisar confiar no servidor continuar no ar.
+- comparações paginadas e provas com limites de tamanho e concorrência;
+- proteção de credenciais, mascaramento de CPF na apresentação e reforços de segurança web;
+- separação entre coletas em andamento, concluídas e com falha;
+- consultas que evitam contar novamente o mesmo registro a cada coleta;
+- correção de agregações que poderiam multiplicar valores nos cruzamentos;
+- nova interface, com melhor leitura dos dados e navegação no celular;
+- testes de integração com PostgreSQL, incluindo falhas parciais e concorrência.
 
-**3. Cruza** automaticamente os dados. Quando uma empresa em lista de impedidos (CEIS/CNEP) aparece num contrato público, fica marcada em vermelho. O cidadão vê. O jornalista vê. A defesa do erário vê.
+Uma distinção essencial: preservar e verificar a integridade de um conteúdo não demonstra que a informação publicada pela fonte é verdadeira.
 
-A página /gastos é a parte mais cidadã: digita um CNPJ, vê todos os contratos públicos federais, estaduais e municipais que aquela empresa fechou. Vê quanto ela recebeu. Vê se está em lista de impedidos. Tudo cruzado automaticamente.
+Para quem trabalha com engenharia de software, dados ou automação, o código reúne alguns problemas interessantes: histórico imutável, processamento com falhas, provas criptográficas e consultas sobre versões de dados.
 
-A stack: **Go 1.23 + Postgres 16 + React/Vite + Docker Compose**, rodando atrás de Traefik. Sem Kubernetes, sem AWS, sem Lambda — uma única VPS, custo mensal de café. Licença AGPL-3.0.
+Aplicação: https://fepublica.mowses.dev.br
+Código: https://github.com/gmowses/fepublica
 
-Não é afiliado a nenhum órgão público. É construído em cima das APIs que já existem, organizadas de um jeito que faz sentido pra quem precisa fiscalizar.
+Que outra fonte de dados públicos você gostaria de poder acompanhar dessa forma?
 
-#TransparênciaPública #DadosAbertos #Blockchain #GovTech #SoftwareLivre
+#DadosAbertos #EngenhariaDeSoftware #OpenSource #Automação

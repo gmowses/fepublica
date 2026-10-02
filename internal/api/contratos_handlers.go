@@ -10,17 +10,17 @@ import (
 
 // contratoView is the JSON shape served by the contratos endpoints.
 type contratoView struct {
-	ID                    int64    `json:"id"`
-	ExternalID            string   `json:"external_id"`
-	OrgaoCNPJ             string   `json:"orgao_cnpj,omitempty"`
-	OrgaoRazaoSocial      string   `json:"orgao_razao_social,omitempty"`
-	UF                    string   `json:"uf,omitempty"`
-	FornecedorNI          string   `json:"fornecedor_ni,omitempty"`
-	FornecedorNome        string   `json:"fornecedor_nome,omitempty"`
-	ValorGlobal           *float64 `json:"valor_global,omitempty"`
-	DataAssinatura        string   `json:"data_assinatura,omitempty"`
-	ObjetoContrato        string   `json:"objeto_contrato,omitempty"`
-	FornecedorSancionado  bool     `json:"fornecedor_sancionado"`
+	ID                   int64    `json:"id"`
+	ExternalID           string   `json:"external_id"`
+	OrgaoCNPJ            string   `json:"orgao_cnpj,omitempty"`
+	OrgaoRazaoSocial     string   `json:"orgao_razao_social,omitempty"`
+	UF                   string   `json:"uf,omitempty"`
+	FornecedorNI         string   `json:"fornecedor_ni,omitempty"`
+	FornecedorNome       string   `json:"fornecedor_nome,omitempty"`
+	ValorGlobal          *float64 `json:"valor_global,omitempty"`
+	DataAssinatura       string   `json:"data_assinatura,omitempty"`
+	ObjetoContrato       string   `json:"objeto_contrato,omitempty"`
+	FornecedorSancionado bool     `json:"fornecedor_sancionado"`
 }
 
 func contratoDTO(c *store.ContratoSummary) contratoView {

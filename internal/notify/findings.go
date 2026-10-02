@@ -127,12 +127,12 @@ func postTelegramText(ctx context.Context, t *TelegramChannel, title, body, link
 	apiURL := fmt.Sprintf("%s/bot%s/sendMessage", t.baseURL, t.botToken)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, strings.NewReader(params.Encode()))
 	if err != nil {
-		return err
+		return telegramRequestError(err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := t.client.Do(req)
 	if err != nil {
-		return err
+		return telegramRequestError(err)
 	}
 	defer resp.Body.Close()
 	body2, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))

@@ -103,7 +103,7 @@ func (s *Store) FindSancionadosContratados(ctx context.Context, limit int) ([]Fi
 			c.valor_global,
 			c.objeto_contrato,
 			c.id
-		FROM contratos c
+		FROM current_contratos c
 		JOIN sancionados s ON s.ni = c.fornecedor_ni
 		WHERE c.fornecedor_ni IS NOT NULL
 		  AND c.fornecedor_ni <> ''
@@ -156,7 +156,7 @@ func (s *Store) FindConcentracaoOrgao(ctx context.Context, limit int) ([]Finding
 	rows, err := s.pool.Query(ctx, `
 		WITH orgao_totals AS (
 			SELECT orgao_cnpj, SUM(valor_global) AS total_orgao, COUNT(*) AS qtd_orgao
-			FROM contratos
+			FROM current_contratos
 			WHERE orgao_cnpj IS NOT NULL AND valor_global IS NOT NULL
 			GROUP BY orgao_cnpj
 			HAVING SUM(valor_global) > 0
@@ -169,7 +169,7 @@ func (s *Store) FindConcentracaoOrgao(ctx context.Context, limit int) ([]Finding
 				MIN(c.fornecedor_nome) AS fornecedor_nome,
 				COUNT(*) AS qtd,
 				SUM(c.valor_global) AS total_par
-			FROM contratos c
+			FROM current_contratos c
 			WHERE c.orgao_cnpj IS NOT NULL
 			  AND c.fornecedor_ni IS NOT NULL
 			  AND c.valor_global IS NOT NULL
@@ -219,15 +219,15 @@ func (s *Store) FindConcentracaoOrgao(ctx context.Context, limit int) ([]Finding
 			Valor:    &v,
 			DedupKey: fmt.Sprintf("concentracao_orgao:%s:%s", orgaoCNPJ, fornNi),
 			Evidence: map[string]interface{}{
-				"orgao":             fallback(orgaoNome, orgaoCNPJ),
-				"orgao_cnpj":        orgaoCNPJ,
-				"fornecedor":        fallback(fornNome, fornNi),
-				"fornecedor_ni":     fornNi,
-				"contratos":         qtd,
-				"total_fornecedor":  totalPar,
-				"total_orgao":       totalOrgao,
-				"share_pct":         share * 100,
-				"explanation":       fmt.Sprintf("Este fornecedor concentra %.1f%% do gasto deste órgão (%d contratos). Concentrações altas podem indicar direcionamento.", share*100, qtd),
+				"orgao":            fallback(orgaoNome, orgaoCNPJ),
+				"orgao_cnpj":       orgaoCNPJ,
+				"fornecedor":       fallback(fornNome, fornNi),
+				"fornecedor_ni":    fornNi,
+				"contratos":        qtd,
+				"total_fornecedor": totalPar,
+				"total_orgao":      totalOrgao,
+				"share_pct":        share * 100,
+				"explanation":      fmt.Sprintf("Este fornecedor concentra %.1f%% do gasto deste órgão (%d contratos). Concentrações altas podem indicar direcionamento.", share*100, qtd),
 			},
 			Link: fmt.Sprintf("/gastos/fornecedores/%s", fornNi),
 		}
@@ -248,7 +248,7 @@ func (s *Store) FindValorOutliers(ctx context.Context, limit int) ([]Finding, er
 				orgao_cnpj,
 				PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY valor_global) AS mediana,
 				COUNT(*) AS n
-			FROM contratos
+			FROM current_contratos
 			WHERE orgao_cnpj IS NOT NULL AND valor_global IS NOT NULL
 			GROUP BY orgao_cnpj
 			HAVING COUNT(*) >= 3
@@ -262,7 +262,7 @@ func (s *Store) FindValorOutliers(ctx context.Context, limit int) ([]Finding, er
 			c.objeto_contrato,
 			s.mediana,
 			(c.valor_global / s.mediana) AS ratio
-		FROM contratos c
+		FROM current_contratos c
 		JOIN stats s USING (orgao_cnpj)
 		WHERE c.valor_global >= 5 * s.mediana
 		  AND s.mediana > 0
@@ -277,11 +277,11 @@ func (s *Store) FindValorOutliers(ctx context.Context, limit int) ([]Finding, er
 	var out []Finding
 	for rows.Next() {
 		var (
-			id                int64
-			fornNome, fornNi  string
-			orgao, objeto     string
-			valor, mediana    float64
-			ratio             float64
+			id               int64
+			fornNome, fornNi string
+			orgao, objeto    string
+			valor, mediana   float64
+			ratio            float64
 		)
 		if err := rows.Scan(&id, &fornNome, &fornNi, &orgao, &valor, &objeto, &mediana, &ratio); err != nil {
 			return nil, err
@@ -365,7 +365,7 @@ func (s *Store) FindCPGFAltoValor(ctx context.Context, limit int) ([]Finding, er
 			COALESCE(unidade_nome, ''),
 			data_transacao,
 			valor_transacao
-		FROM cartoes
+		FROM current_cartoes
 		WHERE valor_transacao >= 10000
 		ORDER BY valor_transacao DESC
 		LIMIT $1
@@ -378,10 +378,10 @@ func (s *Store) FindCPGFAltoValor(ctx context.Context, limit int) ([]Finding, er
 	var out []Finding
 	for rows.Next() {
 		var (
-			id                                                    int64
-			portador, cpf, estab, estabCNPJ, orgao, unidade       string
-			data                                                  *time.Time
-			valor                                                 *float64
+			id                                              int64
+			portador, cpf, estab, estabCNPJ, orgao, unidade string
+			data                                            *time.Time
+			valor                                           *float64
 		)
 		if err := rows.Scan(&id, &portador, &cpf, &estab, &estabCNPJ, &orgao, &unidade, &data, &valor); err != nil {
 			return nil, err
@@ -458,7 +458,7 @@ func (s *Store) FindCPGFEstabOpaco(ctx context.Context, limit int) ([]Finding, e
 			COALESCE(orgao_max_nome, ''),
 			COUNT(*) AS qtd,
 			SUM(valor_transacao) AS total
-		FROM cartoes
+		FROM current_cartoes
 		WHERE estab_nome ILIKE '%SEM INFORMACAO%' OR estab_nome IS NULL OR estab_nome = ''
 		GROUP BY portador_cpf, portador_nome, orgao_max_nome
 		HAVING SUM(valor_transacao) > 0
@@ -581,32 +581,32 @@ func (s *Store) GetForensesSummaryLive(ctx context.Context) (*ForensesSummary, e
 			FROM events WHERE source_id IN ('ceis','cnep')
 		)
 		SELECT
-			(SELECT COUNT(*) FROM contratos c
+			(SELECT COUNT(*) FROM current_contratos c
 			 JOIN sancionados s ON s.ni = c.fornecedor_ni
 			 WHERE c.fornecedor_ni IS NOT NULL AND c.fornecedor_ni <> ''),
 			(SELECT COUNT(*) FROM (
 				WITH orgao_totals AS (
-					SELECT orgao_cnpj, SUM(valor_global) AS t FROM contratos
+					SELECT orgao_cnpj, SUM(valor_global) AS t FROM current_contratos
 					WHERE orgao_cnpj IS NOT NULL AND valor_global IS NOT NULL
 					GROUP BY orgao_cnpj HAVING SUM(valor_global) > 0
 				)
-				SELECT 1 FROM contratos c
+				SELECT 1 FROM current_contratos c
 				JOIN orgao_totals t USING (orgao_cnpj)
 				WHERE c.fornecedor_ni IS NOT NULL AND c.valor_global IS NOT NULL
 				GROUP BY c.orgao_cnpj, c.fornecedor_ni, t.t
 				HAVING SUM(c.valor_global)/t.t >= 0.5 OR COUNT(*) >= 3
 			) x),
-			(SELECT COUNT(*) FROM contratos c
+			(SELECT COUNT(*) FROM current_contratos c
 			 JOIN (
 				SELECT orgao_cnpj, PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY valor_global) AS mediana
-				FROM contratos
+				FROM current_contratos
 				WHERE orgao_cnpj IS NOT NULL AND valor_global IS NOT NULL
 				GROUP BY orgao_cnpj HAVING COUNT(*) >= 3
 			 ) s USING (orgao_cnpj)
 			 WHERE c.valor_global >= 5 * s.mediana AND s.mediana > 0),
-			(SELECT COUNT(*) FROM cartoes WHERE valor_transacao >= 10000),
+			(SELECT COUNT(*) FROM current_cartoes WHERE valor_transacao >= 10000),
 			(SELECT COUNT(*) FROM (
-				SELECT 1 FROM cartoes
+				SELECT 1 FROM current_cartoes
 				WHERE estab_nome ILIKE '%SEM INFORMACAO%' OR estab_nome IS NULL OR estab_nome = ''
 				GROUP BY portador_cpf, portador_nome, orgao_max_nome
 				HAVING SUM(valor_transacao) > 0

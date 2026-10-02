@@ -2,8 +2,9 @@
 // persiste os findings na tabela findings, idempotente via dedup_key.
 //
 // Modes:
-//   --once       run a single pass and exit
-//   --interval   loop interval (default 30m)
+//
+//	--once       run a single pass and exit
+//	--interval   loop interval (default 30m)
 package main
 
 import (
@@ -68,9 +69,9 @@ func run(ctx context.Context, once bool, interval time.Duration) error {
 			"cpgf_concentrado_mes": st.FindCPGFConcentradoNoMes,
 			"valor_crescimento":    st.FindValorCrescimentoGeometrico,
 			// Cross-source detectors (R6)
-			"ceap_sancionado":      st.FindCEAPSancionados,
-			"ceap_concentracao":    st.FindCEAPConcentracao,
-			"fornecedor_duplo":     st.FindFornecedorDuplo,
+			"ceap_sancionado":   st.FindCEAPSancionados,
+			"ceap_concentracao": st.FindCEAPConcentracao,
+			"fornecedor_duplo":  st.FindFornecedorDuplo,
 		} {
 			start := time.Now()
 			rows, err := fn(ctx, 200)

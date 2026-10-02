@@ -23,7 +23,7 @@ func (s *Store) FindMesmoDiaMesmoOrgao(ctx context.Context, limit int) ([]Findin
 			data_assinatura,
 			COUNT(*) AS qtd,
 			SUM(valor_global) AS total
-		FROM contratos
+		FROM current_contratos
 		WHERE orgao_cnpj IS NOT NULL
 		  AND data_assinatura IS NOT NULL
 		  AND valor_global IS NOT NULL
@@ -62,12 +62,12 @@ func (s *Store) FindMesmoDiaMesmoOrgao(ctx context.Context, limit int) ([]Findin
 			Valor:    &v,
 			DedupKey: fmt.Sprintf("mesmo_dia_orgao:%s:%s", orgaoCNPJ, dataStr),
 			Evidence: map[string]interface{}{
-				"orgao":          fallback(orgaoNome, orgaoCNPJ),
-				"orgao_cnpj":     orgaoCNPJ,
-				"data":           dataStr,
-				"qtd_contratos":  qtd,
-				"total_pacote":   total,
-				"explanation":    fmt.Sprintf("Este órgão assinou %d contratos em um único dia (%s) somando R$ %.0f. Pacotes desse tamanho num único dia frequentemente refletem corrida de fim de exercício, com revisão mais fraca.", qtd, dataStr, total),
+				"orgao":         fallback(orgaoNome, orgaoCNPJ),
+				"orgao_cnpj":    orgaoCNPJ,
+				"data":          dataStr,
+				"qtd_contratos": qtd,
+				"total_pacote":  total,
+				"explanation":   fmt.Sprintf("Este órgão assinou %d contratos em um único dia (%s) somando R$ %.0f. Pacotes desse tamanho num único dia frequentemente refletem corrida de fim de exercício, com revisão mais fraca.", qtd, dataStr, total),
 			},
 		})
 	}
@@ -91,7 +91,7 @@ func (s *Store) FindValoresRedondos(ctx context.Context, limit int) ([]Finding, 
 			COALESCE(c.orgao_razao_social, c.orgao_cnpj, ''),
 			c.valor_global,
 			c.objeto_contrato
-		FROM contratos c
+		FROM current_contratos c
 		WHERE c.valor_global IS NOT NULL
 		  AND c.valor_global >= 50000
 		  AND (
@@ -112,10 +112,10 @@ func (s *Store) FindValoresRedondos(ctx context.Context, limit int) ([]Finding, 
 	var out []Finding
 	for rows.Next() {
 		var (
-			id                int64
-			fornNome, fornNi  string
-			orgao, objeto     string
-			valor             float64
+			id               int64
+			fornNome, fornNi string
+			orgao, objeto    string
+			valor            float64
 		)
 		if err := rows.Scan(&id, &fornNome, &fornNi, &orgao, &valor, &objeto); err != nil {
 			return nil, err
@@ -160,7 +160,7 @@ func (s *Store) FindFornecedorMultiUF(ctx context.Context, limit int) ([]Finding
 			ARRAY_AGG(DISTINCT uf ORDER BY uf) AS ufs,
 			COUNT(*) AS qtd_contratos,
 			SUM(valor_global) AS total
-		FROM contratos
+		FROM current_contratos
 		WHERE fornecedor_ni IS NOT NULL
 		  AND fornecedor_ni <> ''
 		  AND uf IS NOT NULL
@@ -178,10 +178,10 @@ func (s *Store) FindFornecedorMultiUF(ctx context.Context, limit int) ([]Finding
 	var out []Finding
 	for rows.Next() {
 		var (
-			fornNi, fornNome     string
+			fornNi, fornNome      string
 			ufCount, qtdContratos int64
-			ufs                  []string
-			total                float64
+			ufs                   []string
+			total                 float64
 		)
 		if err := rows.Scan(&fornNi, &fornNome, &ufCount, &ufs, &qtdContratos, &total); err != nil {
 			return nil, err
@@ -202,12 +202,12 @@ func (s *Store) FindFornecedorMultiUF(ctx context.Context, limit int) ([]Finding
 			Valor:    &v,
 			DedupKey: fmt.Sprintf("fornecedor_multi_uf:%s", fornNi),
 			Evidence: map[string]interface{}{
-				"fornecedor":     fallback(fornNome, fornNi),
-				"fornecedor_ni":  fornNi,
-				"uf_count":       ufCount,
-				"ufs":            ufs,
-				"qtd_contratos":  qtdContratos,
-				"explanation":    fmt.Sprintf("Este fornecedor aparece em %d UFs distintas (%v). Pode ser operação nacional legítima ou um laranja distribuído por estados.", ufCount, ufs),
+				"fornecedor":    fallback(fornNome, fornNi),
+				"fornecedor_ni": fornNi,
+				"uf_count":      ufCount,
+				"ufs":           ufs,
+				"qtd_contratos": qtdContratos,
+				"explanation":   fmt.Sprintf("Este fornecedor aparece em %d UFs distintas (%v). Pode ser operação nacional legítima ou um laranja distribuído por estados.", ufCount, ufs),
 			},
 			Link: fmt.Sprintf("/gastos/fornecedores/%s", fornNi),
 		})
@@ -230,7 +230,7 @@ func (s *Store) FindCPGFConcentradoNoMes(ctx context.Context, limit int) ([]Find
 			mes_extrato,
 			COUNT(*) AS qtd,
 			SUM(valor_transacao) AS total
-		FROM cartoes
+		FROM current_cartoes
 		WHERE portador_cpf IS NOT NULL
 		  AND portador_cpf <> ''
 		  AND mes_extrato IS NOT NULL
@@ -267,12 +267,12 @@ func (s *Store) FindCPGFConcentradoNoMes(ctx context.Context, limit int) ([]Find
 			Valor:    &v,
 			DedupKey: fmt.Sprintf("cpgf_concentrado_mes:%s:%s", cpf, mes),
 			Evidence: map[string]interface{}{
-				"portador":     nome,
-				"portador_cpf": cpf,
-				"orgao":        orgao,
-				"mes_extrato":  mes,
+				"portador":       nome,
+				"portador_cpf":   cpf,
+				"orgao":          orgao,
+				"mes_extrato":    mes,
 				"qtd_transacoes": qtd,
-				"explanation":  fmt.Sprintf("Este portador acumulou R$ %.0f no CPGF no mês %s, em %d transações. CPGF é destinado a despesas operacionais pequenas; concentrações mensais altas merecem checagem.", total, mes, qtd),
+				"explanation":    fmt.Sprintf("Este portador acumulou R$ %.0f no CPGF no mês %s, em %d transações. CPGF é destinado a despesas operacionais pequenas; concentrações mensais altas merecem checagem.", total, mes, qtd),
 			},
 		})
 	}
@@ -299,7 +299,7 @@ func (s *Store) FindValorCrescimentoGeometrico(ctx context.Context, limit int) (
 				MIN(valor_global) AS minv,
 				MAX(valor_global) AS maxv,
 				SUM(valor_global) AS total
-			FROM contratos
+			FROM current_contratos
 			WHERE orgao_cnpj IS NOT NULL
 			  AND fornecedor_ni IS NOT NULL
 			  AND data_assinatura IS NOT NULL

@@ -148,7 +148,7 @@ func (s *Store) ListSnapshotPairsPendingDiff(
 			SELECT id, source_id, collected_at,
 			       LAG(id) OVER (PARTITION BY source_id ORDER BY collected_at ASC) AS prev_id
 			FROM snapshots
-			WHERE merkle_root IS NOT NULL
+			WHERE merkle_root IS NOT NULL AND lifecycle_status = 'complete'
 		)
 		SELECT prev_id AS a, id AS b, source_id
 		FROM ordered

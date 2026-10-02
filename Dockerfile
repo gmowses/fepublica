@@ -1,6 +1,16 @@
 # syntax=docker/dockerfile:1.7
 
-FROM golang:1.23-alpine AS builder
+FROM node:24-alpine AS web-builder
+
+WORKDIR /src/web
+
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+
+COPY web/ ./
+RUN npm run build
+
+FROM golang:1.27.1-alpine AS builder
 
 RUN apk add --no-cache ca-certificates git
 
@@ -10,6 +20,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
+RUN rm -rf internal/api/spa && mkdir -p internal/api/spa
+COPY --from=web-builder /src/web/dist/ ./internal/api/spa/
 
 ARG TARGET=api
 ARG VERSION=dev

@@ -16,40 +16,40 @@ import (
 
 // Row is the projected shape of a PNCP contract.
 type Row struct {
-	ExternalID          string
-	NumeroControlePNCP  string
-	OrgaoCNPJ           string
-	OrgaoRazaoSocial    string
-	OrgaoPoderID        string
-	OrgaoEsferaID       string
-	UF                  string
-	FornecedorNI        string
-	FornecedorNome      string
-	FornecedorTipo      string
-	ValorInicial        *float64
-	ValorGlobal         *float64
-	ValorAcumulado      *float64
-	DataAssinatura      *time.Time
-	DataVigenciaInicio  *time.Time
-	DataVigenciaFim     *time.Time
-	DataPublicacaoPNCP  *time.Time
-	ObjetoContrato      string
-	TipoContrato        string
-	CategoriaProcesso   string
+	ExternalID         string
+	NumeroControlePNCP string
+	OrgaoCNPJ          string
+	OrgaoRazaoSocial   string
+	OrgaoPoderID       string
+	OrgaoEsferaID      string
+	UF                 string
+	FornecedorNI       string
+	FornecedorNome     string
+	FornecedorTipo     string
+	ValorInicial       *float64
+	ValorGlobal        *float64
+	ValorAcumulado     *float64
+	DataAssinatura     *time.Time
+	DataVigenciaInicio *time.Time
+	DataVigenciaFim    *time.Time
+	DataPublicacaoPNCP *time.Time
+	ObjetoContrato     string
+	TipoContrato       string
+	CategoriaProcesso  string
 }
 
 // pncpShape captures the fields we read from PNCP canonical_json.
 type pncpShape struct {
-	NumeroControlePncpCompra string  `json:"numeroControlePncpCompra"`
-	DataAtualizacao          string  `json:"dataAtualizacao"`
-	DataAssinatura           string  `json:"dataAssinatura"`
-	DataVigenciaInicio       string  `json:"dataVigenciaInicio"`
-	DataVigenciaFim          string  `json:"dataVigenciaFim"`
-	NiFornecedor             string  `json:"niFornecedor"`
+	NumeroControlePncpCompra  string `json:"numeroControlePncpCompra"`
+	DataAtualizacao           string `json:"dataAtualizacao"`
+	DataAssinatura            string `json:"dataAssinatura"`
+	DataVigenciaInicio        string `json:"dataVigenciaInicio"`
+	DataVigenciaFim           string `json:"dataVigenciaFim"`
+	NiFornecedor              string `json:"niFornecedor"`
 	NomeRazaoSocialFornecedor string `json:"nomeRazaoSocialFornecedor"`
-	TipoPessoa               string  `json:"tipoPessoa"`
-	ObjetoContrato           string  `json:"objetoContrato"`
-	TipoContrato             *struct {
+	TipoPessoa                string `json:"tipoPessoa"`
+	ObjetoContrato            string `json:"objetoContrato"`
+	TipoContrato              *struct {
 		Nome string `json:"nome"`
 	} `json:"tipoContrato"`
 	CategoriaProcesso *struct {
@@ -59,10 +59,10 @@ type pncpShape struct {
 	ValorGlobal    *float64 `json:"valorGlobal"`
 	ValorAcumulado *float64 `json:"valorAcumulado"`
 	OrgaoEntidade  *struct {
-		CNPJ         string `json:"cnpj"`
-		RazaoSocial  string `json:"razaoSocial"`
-		PoderID      string `json:"poderId"`
-		EsferaID     string `json:"esferaId"`
+		CNPJ        string `json:"cnpj"`
+		RazaoSocial string `json:"razaoSocial"`
+		PoderID     string `json:"poderId"`
+		EsferaID    string `json:"esferaId"`
 	} `json:"orgaoEntidade"`
 	UnidadeOrgao *struct {
 		UFSigla string `json:"ufSigla"`
@@ -76,15 +76,15 @@ func Parse(raw []byte, externalID string) (*Row, error) {
 		return nil, fmt.Errorf("contratos: parse pncp: %w", err)
 	}
 	r := &Row{
-		ExternalID:          externalID,
-		NumeroControlePNCP:  src.NumeroControlePncpCompra,
-		FornecedorNI:        src.NiFornecedor,
-		FornecedorNome:      src.NomeRazaoSocialFornecedor,
-		FornecedorTipo:      src.TipoPessoa,
-		ObjetoContrato:      src.ObjetoContrato,
-		ValorInicial:        src.ValorInicial,
-		ValorGlobal:         src.ValorGlobal,
-		ValorAcumulado:      src.ValorAcumulado,
+		ExternalID:         externalID,
+		NumeroControlePNCP: src.NumeroControlePncpCompra,
+		FornecedorNI:       src.NiFornecedor,
+		FornecedorNome:     src.NomeRazaoSocialFornecedor,
+		FornecedorTipo:     src.TipoPessoa,
+		ObjetoContrato:     src.ObjetoContrato,
+		ValorInicial:       src.ValorInicial,
+		ValorGlobal:        src.ValorGlobal,
+		ValorAcumulado:     src.ValorAcumulado,
 	}
 	if src.OrgaoEntidade != nil {
 		r.OrgaoCNPJ = src.OrgaoEntidade.CNPJ

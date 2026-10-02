@@ -55,10 +55,14 @@ func (s *Store) ListUnindexedCartoesEvents(ctx context.Context, limit int) ([]Ev
 	rows, err := s.pool.Query(ctx, `
 		SELECT e.id, e.snapshot_id, e.source_id, e.external_id, e.content_hash, e.canonical_json, e.collected_at
 		FROM events e
+		JOIN snapshots s ON s.id = e.snapshot_id AND s.lifecycle_status = 'complete'
 		LEFT JOIN cartoes c ON c.event_id = e.id
+		LEFT JOIN projection_failures pf ON pf.event_id = e.id
+			AND pf.projection = 'cartoes' AND pf.resolved_at IS NULL
 		WHERE e.source_id = 'cartoes-cpgf'
 		  AND c.id IS NULL
 		  AND e.canonical_json IS NOT NULL
+		  AND (pf.event_id IS NULL OR (pf.terminal_at IS NULL AND pf.next_retry_at <= NOW()))
 		ORDER BY e.id ASC
 		LIMIT $1
 	`, limit)
@@ -80,10 +84,10 @@ func (s *Store) ListUnindexedCartoesEvents(ctx context.Context, limit int) ([]Ev
 
 // CartoesStats summarizes the CPGF table.
 type CartoesStats struct {
-	TotalTransacoes int64   `json:"total_transacoes"`
-	ValorTotal      float64 `json:"valor_total"`
-	OrgaosUnicos    int64   `json:"orgaos_unicos"`
-	PortadoresUnicos int64  `json:"portadores_unicos"`
+	TotalTransacoes  int64   `json:"total_transacoes"`
+	ValorTotal       float64 `json:"valor_total"`
+	OrgaosUnicos     int64   `json:"orgaos_unicos"`
+	PortadoresUnicos int64   `json:"portadores_unicos"`
 }
 
 // GetCartoesStats returns aggregate stats for the CPGF projection.
@@ -95,7 +99,7 @@ func (s *Store) GetCartoesStats(ctx context.Context) (*CartoesStats, error) {
 			COALESCE(SUM(valor_transacao), 0),
 			COUNT(DISTINCT orgao_max_codigo),
 			COUNT(DISTINCT portador_cpf)
-		FROM cartoes
+		FROM current_cartoes
 	`).Scan(&st.TotalTransacoes, &st.ValorTotal, &st.OrgaosUnicos, &st.PortadoresUnicos)
 	if err != nil {
 		return nil, fmt.Errorf("store: cartoes stats: %w", err)
@@ -122,7 +126,7 @@ func (s *Store) TopPortadores(ctx context.Context, limit int) ([]CartoesTopRow, 
 			COALESCE(MIN(portador_nome), '') AS nome,
 			COUNT(*) AS qtd,
 			COALESCE(SUM(valor_transacao), 0) AS total
-		FROM cartoes
+		FROM current_cartoes
 		WHERE portador_cpf IS NOT NULL AND portador_cpf <> ''
 		GROUP BY portador_cpf
 		ORDER BY total DESC
@@ -154,7 +158,7 @@ func (s *Store) TopOrgaosCartoes(ctx context.Context, limit int) ([]CartoesTopRo
 			COALESCE(MIN(orgao_max_nome), '') AS nome,
 			COUNT(*) AS qtd,
 			COALESCE(SUM(valor_transacao), 0) AS total
-		FROM cartoes
+		FROM current_cartoes
 		WHERE orgao_max_codigo IS NOT NULL AND orgao_max_codigo <> ''
 		GROUP BY orgao_max_codigo
 		ORDER BY total DESC
@@ -208,7 +212,7 @@ func (s *Store) ListCartoes(ctx context.Context, search string, limit int) ([]Ca
 	}
 
 	var total int64
-	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM cartoes "+where, args...).Scan(&total); err != nil {
+	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM current_cartoes "+where, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("store: count cartoes: %w", err)
 	}
 
@@ -219,7 +223,7 @@ func (s *Store) ListCartoes(ctx context.Context, search string, limit int) ([]Ca
 			COALESCE(portador_nome, ''), COALESCE(portador_cpf, ''),
 			COALESCE(orgao_max_nome, ''), COALESCE(orgao_max_sigla, ''),
 			COALESCE(unidade_nome, '')
-		FROM cartoes
+		FROM current_cartoes
 		%s
 		ORDER BY valor_transacao DESC NULLS LAST
 		LIMIT $%d

@@ -64,6 +64,9 @@ func serveSPA(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "public, max-age=300")
 	}
 	w.Header().Set("Content-Type", contentTypeFor(reqPath))
+	if strings.HasSuffix(reqPath, ".html") {
+		setHTMLSecurityHeaders(w)
+	}
 
 	http.ServeContent(w, r, path.Base(reqPath), stat.ModTime(), asReadSeeker(f))
 }
@@ -78,13 +81,18 @@ func serveIndex(w http.ResponseWriter, r *http.Request) {
 	stat, _ := f.Stat()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=60")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+	setHTMLSecurityHeaders(w)
 	if stat != nil {
 		http.ServeContent(w, r, "index.html", stat.ModTime(), asReadSeeker(f))
 		return
 	}
 	_, _ = copyFile(w, f)
+}
+
+func setHTMLSecurityHeaders(w http.ResponseWriter) {
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://raw.githubusercontent.com")
 }
 
 func contentTypeFor(p string) string {

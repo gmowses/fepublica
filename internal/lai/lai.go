@@ -17,8 +17,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gmowses/fepublica/internal/store"
 	"golang.org/x/net/html"
+
+	"github.com/gmowses/fepublica/internal/store"
 )
 
 // requiredTerms are strings the LAI expects every transparency portal to cover.
@@ -42,20 +43,20 @@ var requiredLinks = []string{
 
 // Result mirrors the lai_checks row shape.
 type Result struct {
-	EnteID        string
-	CheckedAt     time.Time
-	TargetURL     string
-	HTTPStatus    int
-	ResponseMS    int
-	SSLValid      bool
-	SSLExpiresAt  *time.Time
-	PortalLoads   bool
-	HTMLSizeBytes int
-	TermsFound    map[string]bool
-	RequiredLinks map[string]bool
+	EnteID         string
+	CheckedAt      time.Time
+	TargetURL      string
+	HTTPStatus     int
+	ResponseMS     int
+	SSLValid       bool
+	SSLExpiresAt   *time.Time
+	PortalLoads    bool
+	HTMLSizeBytes  int
+	TermsFound     map[string]bool
+	RequiredLinks  map[string]bool
 	HTMLArchiveKey string
-	Errors        []string
-	TierAtCheck   int
+	Errors         []string
+	TierAtCheck    int
 }
 
 // Checker performs a single check against one ente's portal.

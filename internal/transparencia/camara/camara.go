@@ -4,8 +4,9 @@
 // where every receipt is public including the supplier CNPJ.
 //
 // Endpoints:
-//   GET /api/v2/deputados             list of current legislatura's deputados
-//   GET /api/v2/deputados/{id}/despesas?ano=YYYY  CEAP receipts by year
+//
+//	GET /api/v2/deputados             list of current legislatura's deputados
+//	GET /api/v2/deputados/{id}/despesas?ano=YYYY  CEAP receipts by year
 //
 // CEAP is politically hot data: cross-referencing supplier CNPJs against
 // CEIS/CNEP and against contratos PNCP surfaces "deputado paid empresa
@@ -47,10 +48,10 @@ type deputado struct {
 }
 
 type despesa struct {
-	CodDocumento  json.RawMessage `json:"codDocumento"`
-	Ano           int             `json:"ano"`
-	Mes           int             `json:"mes"`
-	CnpjCpf       string          `json:"cnpjCpfFornecedor"`
+	CodDocumento json.RawMessage `json:"codDocumento"`
+	Ano          int             `json:"ano"`
+	Mes          int             `json:"mes"`
+	CnpjCpf      string          `json:"cnpjCpfFornecedor"`
 }
 
 // Package-level deputado metadata maps populated by listDeputados, used

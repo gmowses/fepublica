@@ -110,12 +110,12 @@ func (s *Server) handleForensesPersisted(w http.ResponseWriter, r *http.Request)
 
 // atomEntry mirrors the shape used by the existing feeds package.
 type forensesAtomFeed struct {
-	XMLName xml.Name           `xml:"feed"`
-	Xmlns   string             `xml:"xmlns,attr"`
-	Title   string             `xml:"title"`
-	Link    forensesAtomLink   `xml:"link"`
-	Updated string             `xml:"updated"`
-	ID      string             `xml:"id"`
+	XMLName xml.Name            `xml:"feed"`
+	Xmlns   string              `xml:"xmlns,attr"`
+	Title   string              `xml:"title"`
+	Link    forensesAtomLink    `xml:"link"`
+	Updated string              `xml:"updated"`
+	ID      string              `xml:"id"`
 	Entries []forensesAtomEntry `xml:"entry"`
 }
 
@@ -173,7 +173,9 @@ func (s *Server) handleForensesAtom(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	w.Header().Set("Content-Type", "application/atom+xml; charset=utf-8")
-	w.Write([]byte(xml.Header))
+	if _, err := w.Write([]byte(xml.Header)); err != nil {
+		return
+	}
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
 	if err := enc.Encode(feed); err != nil {

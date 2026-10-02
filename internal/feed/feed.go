@@ -83,9 +83,10 @@ func formatSummary(e *store.ChangeEvent) string {
 		"modified": "teve o conteúdo alterado entre duas coletas consecutivas",
 	}[e.ChangeType]
 	sev := ""
-	if e.Severity == "warn" {
+	switch e.Severity {
+	case "warn":
 		sev = " Severidade warn."
-	} else if e.Severity == "alert" {
+	case "alert":
 		sev = " Severidade alert."
 	}
 	return fmt.Sprintf("Registro %s (%s) %s.%s", e.ExternalID, e.SourceID, action, sev)

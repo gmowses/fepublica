@@ -22,6 +22,7 @@ export interface Snapshot {
   merkle_computed_at?: string;
   collector_version: string;
   notes?: string;
+  lifecycle_status?: "complete" | "collecting" | "failed";
 }
 
 export interface Anchor {
@@ -61,6 +62,7 @@ export interface DiffResult {
   snapshot_a: { id: number; collected_at: string; record_count: number };
   snapshot_b: { id: number; collected_at: string; record_count: number };
   summary: { added: number; removed: number; changed: number };
+  page: { limit: number; offset: number };
   added: DiffItem[] | null;
   removed: DiffItem[] | null;
   changed: DiffItem[] | null;
@@ -123,8 +125,12 @@ export const api = {
     get<unknown>(
       `/api/snapshots/${snapshotId}/events/${encodeURIComponent(externalId)}/proof`
     ),
-  diff: (a: number, b: number) =>
-    get<DiffResult>(`/api/snapshots/${a}/diff/${b}`),
+  diff: (a: number, b: number, params: { limit?: number; offset?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (params.limit) q.set("limit", String(params.limit));
+    if (params.offset) q.set("offset", String(params.offset));
+    return get<DiffResult>(`/api/snapshots/${a}/diff/${b}?${q}`);
+  },
 };
 
 export function shortHash(h?: string, n = 10): string {

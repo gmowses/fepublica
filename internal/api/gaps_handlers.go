@@ -1,7 +1,7 @@
 package api
 
 import (
-	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -48,40 +48,7 @@ func (s *Server) handleListGaps(w http.ResponseWriter, r *http.Request) {
 // moderation / auth. For now, any caller can POST a gap — it's marked as
 // 'open' and becomes visible in the catalog.
 func (s *Server) handleCreateGap(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		EnteID         string `json:"ente_id"`
-		SourceID       string `json:"source_id"`
-		Category       string `json:"category"`
-		Title          string `json:"title"`
-		Description    string `json:"description"`
-		Severity       string `json:"severity"`
-		LegalReference string `json:"legal_reference"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	if in.Category == "" || in.Title == "" || in.Description == "" {
-		http.Error(w, "category, title, description are required", http.StatusBadRequest)
-		return
-	}
-	if in.Severity == "" {
-		in.Severity = "info"
-	}
-	id, err := s.store.InsertGap(r.Context(), store.InsertGapParams{
-		EnteID:         in.EnteID,
-		SourceID:       in.SourceID,
-		Category:       in.Category,
-		Title:          in.Title,
-		Description:    in.Description,
-		Severity:       in.Severity,
-		LegalReference: in.LegalReference,
-	})
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": id})
+	writeError(w, http.StatusMethodNotAllowed, errors.New("public gap submission is disabled"))
 }
 
 func gapDTO(g *store.Gap) map[string]any {

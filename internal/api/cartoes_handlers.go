@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/gmowses/fepublica/internal/cartoes"
 	"github.com/gmowses/fepublica/internal/store"
 )
 
@@ -30,7 +31,7 @@ func cartaoDTO(c *store.CartaoSummary) cartaoView {
 		EstabNome:      c.EstabNome,
 		EstabCNPJ:      c.EstabCNPJ,
 		PortadorNome:   c.PortadorNome,
-		PortadorCPF:    c.PortadorCPF,
+		PortadorCPF:    cartoes.MaskCPF(c.PortadorCPF),
 		OrgaoMaxNome:   c.OrgaoMaxNome,
 		OrgaoMaxSigla:  c.OrgaoMaxSigla,
 		UnidadeNome:    c.UnidadeNome,
@@ -63,8 +64,8 @@ func (s *Server) handleListCartoes(w http.ResponseWriter, r *http.Request) {
 		out = append(out, cartaoDTO(&rows[i]))
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"total":    total,
-		"cartoes":  out,
+		"total":   total,
+		"cartoes": out,
 	})
 }
 
@@ -74,6 +75,9 @@ func (s *Server) handleTopPortadores(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
+	}
+	for i := range rows {
+		rows[i].Key = cartoes.MaskCPF(rows[i].Key)
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"top": rows})
 }

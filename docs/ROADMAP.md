@@ -74,7 +74,8 @@ Legenda: [x] done · [~] in progress · [ ] not started
 
 - [x] Migration 006: subscriptions_webhook + subscriptions_email + gap_catalog + gap_evidence
 - [x] Store repos para gaps
-- [x] API endpoints GET/POST /api/gaps
+- [x] API endpoint GET /api/gaps
+- [x] Escrita pública de gaps desabilitada até haver autenticação e moderação
 - [ ] Webhook delivery worker (cmd/notifier extension)
 - [ ] Emailer worker com Resend
 - [ ] Email double opt-in flow

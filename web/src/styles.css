@@ -4,51 +4,75 @@
 
 @layer base {
   :root {
-    color-scheme: dark;
-  }
-  html.light {
     color-scheme: light;
+    --color-bg: 243 246 248;
+    --color-bg-soft: 233 239 243;
+    --color-bg-card: 255 255 255;
+    --color-ink: 20 45 66;
+    --color-ink-dim: 88 107 123;
+    --color-accent: 6 105 108;
+    --color-ok: 12 116 104;
+    --color-danger: 177 54 67;
+    --color-warn: 157 91 14;
+    --color-border: 199 213 222;
+    --color-accent-foreground: 255 255 255;
   }
-  html.light body {
-    background: #fafaf7;
-    color: #181818;
+  html:not(.light) {
+    color-scheme: dark;
+    --color-bg: 13 30 44;
+    --color-bg-soft: 20 45 66;
+    --color-bg-card: 24 53 75;
+    --color-ink: 234 242 246;
+    --color-ink-dim: 174 192 204;
+    --color-accent: 75 200 194;
+    --color-ok: 86 210 170;
+    --color-danger: 255 143 150;
+    --color-warn: 242 184 92;
+    --color-border: 62 88 108;
+    --color-accent-foreground: 20 45 66;
   }
-  html.light .text-ink { color: #181818; }
-  html.light .text-ink-dim { color: #5a5a58; }
-  html.light .bg-bg { background: #fafaf7; }
-  html.light .bg-bg-soft { background: #f0f0ea; }
-  html.light .bg-bg-card { background: #ffffff; }
-  html.light .border-ink\/10 { border-color: #e0e0d6; }
   body {
     min-height: 100vh;
+    background: rgb(var(--color-bg));
+    color: rgb(var(--color-ink));
+  }
+  *,
+  ::before,
+  ::after {
+    border-color: rgb(var(--color-border) / 0.7);
+  }
+  :focus-visible {
+    outline: 3px solid rgb(var(--color-accent) / 0.7);
+    outline-offset: 3px;
   }
   ::selection {
-    background: #ffd166;
-    color: #141414;
+    background: rgb(var(--color-accent));
+    color: white;
   }
 }
 
 @layer components {
   .container-app {
-    @apply max-w-6xl mx-auto px-4 md:px-6;
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
   }
   .btn {
-    @apply inline-flex items-center gap-2 px-4 py-2 rounded-md border border-ink/10 bg-bg-card text-ink text-sm font-medium transition hover:border-accent;
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-ink/15 bg-bg-card px-4 py-2.5 text-sm font-semibold text-ink shadow-sm transition-colors hover:border-accent hover:text-accent;
   }
   .btn-primary {
-    @apply bg-accent text-black border-accent hover:brightness-110;
+    @apply border-accent bg-accent hover:bg-accent/90;
+    color: rgb(var(--color-accent-foreground));
   }
   .card {
-    @apply bg-bg-card border border-ink/10 rounded-lg p-4;
+    @apply rounded-lg border border-ink/15 bg-bg-card p-5 shadow-[0_1px_2px_rgb(var(--color-ink)/0.04)];
   }
   .stat-k {
-    @apply font-mono text-[0.72rem] uppercase tracking-wider text-ink-dim;
+    @apply font-mono text-[0.69rem] uppercase tracking-[0.12em] text-ink-dim;
   }
   .stat-v {
-    @apply text-2xl font-semibold tabular-nums text-ink mt-1;
+    @apply mt-1 font-display text-2xl font-semibold tracking-tight tabular-nums text-ink;
   }
   .chip {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-mono border border-ink/10 text-ink-dim;
+    @apply inline-flex items-center gap-1 rounded-full border border-ink/15 px-2 py-0.5 font-mono text-xs text-ink-dim;
   }
   .chip-ok {
     @apply text-ok border-ok/30;
@@ -61,19 +85,42 @@
   }
 }
 
+@layer base {
+  input,
+  select,
+  textarea {
+    @apply rounded-md border border-ink/15 bg-bg-card text-ink;
+  }
+  th {
+    @apply bg-bg-soft font-mono text-[0.69rem] font-medium tracking-[0.1em];
+  }
+  tbody tr {
+    @apply transition-colors hover:bg-bg-soft/70;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
 /* Leaflet tweaks */
 .leaflet-container {
-  background: #11161f;
+  background: rgb(var(--color-bg-soft));
   border-radius: 0.5rem;
-}
-html.light .leaflet-container {
-  background: #f0f0ea;
 }
 .leaflet-tile-pane {
   filter: none;
 }
 .fepublica-uf-path {
-  transition: fill-opacity 160ms ease, stroke-width 160ms ease;
+  transition:
+    fill-opacity 160ms ease,
+    stroke-width 160ms ease;
 }
 .fepublica-uf-path:hover {
   fill-opacity: 0.9;

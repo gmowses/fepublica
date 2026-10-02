@@ -1,7 +1,13 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { api, formatBytes, formatDate, formatNumber, shortHash } from "../lib/api";
+import {
+  api,
+  formatBytes,
+  formatDate,
+  formatNumber,
+  shortHash,
+} from "../lib/api";
 import {
   ArrowLeftRight,
   ChevronLeft,
@@ -9,6 +15,7 @@ import {
   FileJson,
   Search,
 } from "lucide-react";
+import { safeHttpURL, safeURLHost } from "../lib/urls";
 
 export function SnapshotDetail() {
   const { id } = useParams();
@@ -29,7 +36,8 @@ export function SnapshotDetail() {
   });
   const eventsQ = useQuery({
     queryKey: ["snapshot-events", snapId, search, offset],
-    queryFn: () => api.snapshotEvents(snapId, { limit: pageSize, offset, search }),
+    queryFn: () =>
+      api.snapshotEvents(snapId, { limit: pageSize, offset, search }),
     enabled: !Number.isNaN(snapId),
   });
   const allSnapsQ = useQuery({
@@ -56,6 +64,9 @@ export function SnapshotDetail() {
     );
   }
   const snap = snapQ.data;
+  const incomplete =
+    snap.lifecycle_status === "collecting" ||
+    snap.lifecycle_status === "failed";
 
   return (
     <div className="container-app py-6 md:py-10">
@@ -103,6 +114,16 @@ export function SnapshotDetail() {
         )}
       </div>
 
+      {incomplete && (
+        <div className="card mb-6 text-sm text-ink-dim">
+          {snap.lifecycle_status === "collecting"
+            ? "Coleta em andamento."
+            : "Esta coleta falhou antes da conclusão."}{" "}
+          Contagem esperada: {formatNumber(snap.record_count)} registros; a
+          coleta persistida pode estar incompleta.
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <div className="card">
           <div className="stat-k">Registros</div>
@@ -129,6 +150,10 @@ export function SnapshotDetail() {
       {/* Anchors */}
       <section className="mb-6">
         <h2 className="text-lg font-semibold mb-2">Âncoras OpenTimestamps</h2>
+        <p className="mb-3 text-sm text-ink-dim">
+          Um recibo com atestação Bitcoin ainda deve ser verificado de forma
+          independente com o cliente oficial OpenTimestamps.
+        </p>
         {anchorsQ.isLoading && (
           <div className="text-ink-dim text-sm">carregando…</div>
         )}
@@ -148,36 +173,47 @@ export function SnapshotDetail() {
                 </tr>
               </thead>
               <tbody>
-                {anchorsQ.data.anchors.map((a) => (
-                  <tr key={a.id} className="border-t border-ink/10">
-                    <td className="px-4 py-2 font-mono">#{a.id}</td>
-                    <td className="px-4 py-2">
-                      <a
-                        className="text-accent hover:underline"
-                        href={a.calendar_url}
-                        target="_blank"
-                        rel="noopener"
-                      >
-                        {new URL(a.calendar_url).host}
-                      </a>
-                    </td>
-                    <td className="px-4 py-2 text-ink-dim">
-                      {formatDate(a.submitted_at)}
-                    </td>
-                    <td className="px-4 py-2">
-                      {a.upgraded ? (
-                        <span className="chip chip-ok">
-                          confirmado{a.block_height ? ` · block ${a.block_height}` : ""}
-                        </span>
-                      ) : (
-                        <span className="chip chip-warn">pending</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 font-mono text-ink-dim">
-                      {a.receipt_bytes} B
-                    </td>
-                  </tr>
-                ))}
+                {anchorsQ.data.anchors.map((a) => {
+                  const calendarURL = safeHttpURL(a.calendar_url);
+                  const calendarHost = safeURLHost(a.calendar_url);
+                  return (
+                    <tr key={a.id} className="border-t border-ink/10">
+                      <td className="px-4 py-2 font-mono">#{a.id}</td>
+                      <td className="px-4 py-2">
+                        {calendarURL && calendarHost ? (
+                          <a
+                            className="text-accent hover:underline"
+                            href={calendarURL}
+                            target="_blank"
+                            rel="noopener"
+                          >
+                            {calendarHost}
+                          </a>
+                        ) : (
+                          <span className="text-ink-dim">URL indisponível</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-ink-dim">
+                        {formatDate(a.submitted_at)}
+                      </td>
+                      <td className="px-4 py-2">
+                        {a.upgraded ? (
+                          <span className="chip chip-ok">
+                            recibo com atestação Bitcoin
+                            {a.block_height ? ` · block ${a.block_height}` : ""}
+                          </span>
+                        ) : (
+                          <span className="chip chip-warn">
+                            aguardando atestação
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 font-mono text-ink-dim">
+                        {a.receipt_bytes} B
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -201,7 +237,9 @@ export function SnapshotDetail() {
             />
           </div>
           <span className="text-xs text-ink-dim">
-            {eventsQ.data ? formatNumber(eventsQ.data.total) + " registros" : ""}
+            {eventsQ.data
+              ? formatNumber(eventsQ.data.total) + " registros"
+              : ""}
           </span>
         </div>
 
@@ -279,10 +317,7 @@ export function SnapshotDetail() {
 
       <div className="mt-8 flex gap-3 flex-wrap">
         {diffCandidates.length > 0 && (
-          <Link
-            to={`/diff/${snap.id}/${diffCandidates[0].id}`}
-            className="btn"
-          >
+          <Link to={`/diff/${snap.id}/${diffCandidates[0].id}`} className="btn">
             <ArrowLeftRight className="size-4" /> diff com snapshot anterior
           </Link>
         )}

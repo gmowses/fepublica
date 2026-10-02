@@ -2,6 +2,7 @@ import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 import { formatDate } from "../lib/api";
+import { safeHttpURL } from "../lib/urls";
 
 interface Ente {
   id: string;
@@ -44,6 +45,7 @@ export function EnteDetail() {
     );
   }
   const e = enteQ.data;
+  const portalURL = safeHttpURL(e.domain_hint);
 
   return (
     <div className="container-app py-6 md:py-10">
@@ -64,10 +66,10 @@ export function EnteDetail() {
         {" · tier: "} {e.tier}
       </div>
 
-      {e.domain_hint && (
+      {portalURL && (
         <a
           className="btn mt-4"
-          href={e.domain_hint}
+          href={portalURL}
           target="_blank"
           rel="noopener"
         >

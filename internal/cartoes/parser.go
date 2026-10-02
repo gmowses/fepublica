@@ -5,31 +5,34 @@ package cartoes
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
 
+var maskedCPFPattern = regexp.MustCompile(`^\*\*\*\.\d{3}\.\d{3}-\*\*$`)
+
 // Row is the projected shape of a CPGF transaction.
 type Row struct {
-	ExternalID      string
-	TipoCartao      string
-	MesExtrato      string
-	DataTransacao   *time.Time
-	ValorTransacao  *float64
-	EstabCNPJ       string
-	EstabNome       string
-	EstabTipo       string
-	PortadorCPF     string
-	PortadorNome    string
-	OrgaoCodigo     string
-	OrgaoSigla      string
-	OrgaoNome       string
-	OrgaoMaxCodigo  string
-	OrgaoMaxSigla   string
-	OrgaoMaxNome    string
-	UnidadeCodigo   string
-	UnidadeNome     string
+	ExternalID     string
+	TipoCartao     string
+	MesExtrato     string
+	DataTransacao  *time.Time
+	ValorTransacao *float64
+	EstabCNPJ      string
+	EstabNome      string
+	EstabTipo      string
+	PortadorCPF    string
+	PortadorNome   string
+	OrgaoCodigo    string
+	OrgaoSigla     string
+	OrgaoNome      string
+	OrgaoMaxCodigo string
+	OrgaoMaxSigla  string
+	OrgaoMaxNome   string
+	UnidadeCodigo  string
+	UnidadeNome    string
 }
 
 // cpgfShape captures the fields we read from the CPGF response.
@@ -51,8 +54,8 @@ type cpgfShape struct {
 		Nome         string `json:"nome"`
 	} `json:"portador"`
 	UnidadeGestora *struct {
-		Codigo        string `json:"codigo"`
-		Nome          string `json:"nome"`
+		Codigo         string `json:"codigo"`
+		Nome           string `json:"nome"`
 		OrgaoVinculado *struct {
 			CodigoSIAFI string `json:"codigoSIAFI"`
 			Sigla       string `json:"sigla"`
@@ -85,7 +88,7 @@ func Parse(raw []byte, externalID string) (*Row, error) {
 		r.EstabTipo = src.Estabelecimento.Tipo
 	}
 	if src.Portador != nil {
-		r.PortadorCPF = src.Portador.CPFFormatado
+		r.PortadorCPF = MaskCPF(src.Portador.CPFFormatado)
 		r.PortadorNome = src.Portador.Nome
 	}
 	if src.UnidadeGestora != nil {
@@ -105,6 +108,24 @@ func Parse(raw []byte, externalID string) (*Row, error) {
 	r.DataTransacao = parseDateBR(src.DataTransacao)
 	r.ValorTransacao = parseValorBR(src.ValorTransacao)
 	return r, nil
+}
+
+// MaskCPF preserves the six central CPF digits for the public projection.
+// The source record remains unchanged in canonical_json for integrity proofs.
+func MaskCPF(value string) string {
+	if maskedCPFPattern.MatchString(value) {
+		return value
+	}
+	digits := make([]rune, 0, 11)
+	for _, r := range value {
+		if r >= '0' && r <= '9' {
+			digits = append(digits, r)
+		}
+	}
+	if len(digits) != 11 {
+		return ""
+	}
+	return "***." + string(digits[3:6]) + "." + string(digits[6:9]) + "-**"
 }
 
 func parseDateBR(s string) *time.Time {

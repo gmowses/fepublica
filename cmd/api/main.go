@@ -75,6 +75,11 @@ func run(ctx context.Context) error {
 		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
+	metricsAddr := os.Getenv("METRICS_ADDR")
+	if metricsAddr == "" {
+		metricsAddr = "127.0.0.1:9090"
+	}
+	metricsSrv := &http.Server{Addr: metricsAddr, Handler: api.MetricsHandler(), ReadHeaderTimeout: 5 * time.Second}
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -84,6 +89,12 @@ func run(ctx context.Context) error {
 		}
 		close(errCh)
 	}()
+	go func() {
+		log.Info().Str("addr", metricsAddr).Msg("metrics: listening")
+		if err := metricsSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error().Err(err).Msg("metrics: server stopped")
+		}
+	}()
 
 	select {
 	case err := <-errCh:
@@ -91,7 +102,10 @@ func run(ctx context.Context) error {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		return httpSrv.Shutdown(shutdownCtx)
+		if err := httpSrv.Shutdown(shutdownCtx); err != nil {
+			return err
+		}
+		return metricsSrv.Shutdown(shutdownCtx)
 	}
 }
 

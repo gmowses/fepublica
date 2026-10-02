@@ -76,6 +76,9 @@ func runOnce(ctx context.Context, sourceID string) error {
 	if err != nil {
 		return err
 	}
+	if requiresTransparenciaAPIKey(sourceID) && cfg.Transparencia.APIKey == "" {
+		return fmt.Errorf("source %q requires TRANSPARENCIA_API_KEY", sourceID)
+	}
 	log := logging.New(cfg.Log.Level, cfg.Log.Format, "collector")
 
 	st, err := store.Open(ctx, cfg.Postgres.DSN())
@@ -113,19 +116,21 @@ func serve(ctx context.Context) error {
 	c := collector.New(st, client, log, version)
 
 	sched := cron.New(cron.WithLogger(cronLogger{log}))
-	if _, err := sched.AddFunc(cfg.Collector.CEISSchedule, func() {
-		if err := c.RunOnce(ctx, ceis.SourceID, ceis.Fetch); err != nil {
-			log.Error().Err(err).Str("source", ceis.SourceID).Msg("scheduled run failed")
+	if cfg.Transparencia.APIKey != "" {
+		if _, err := sched.AddFunc(cfg.Collector.CEISSchedule, func() {
+			if err := c.RunOnce(ctx, ceis.SourceID, ceis.Fetch); err != nil {
+				log.Error().Err(err).Str("source", ceis.SourceID).Msg("scheduled run failed")
+			}
+		}); err != nil {
+			return fmt.Errorf("schedule ceis: %w", err)
 		}
-	}); err != nil {
-		return fmt.Errorf("schedule ceis: %w", err)
-	}
-	if _, err := sched.AddFunc(cfg.Collector.CNEPSchedule, func() {
-		if err := c.RunOnce(ctx, cnep.SourceID, cnep.Fetch); err != nil {
-			log.Error().Err(err).Str("source", cnep.SourceID).Msg("scheduled run failed")
+		if _, err := sched.AddFunc(cfg.Collector.CNEPSchedule, func() {
+			if err := c.RunOnce(ctx, cnep.SourceID, cnep.Fetch); err != nil {
+				log.Error().Err(err).Str("source", cnep.SourceID).Msg("scheduled run failed")
+			}
+		}); err != nil {
+			return fmt.Errorf("schedule cnep: %w", err)
 		}
-	}); err != nil {
-		return fmt.Errorf("schedule cnep: %w", err)
 	}
 	if _, err := sched.AddFunc(cfg.Collector.PNCPSchedule, func() {
 		if err := c.RunOnce(ctx, pncp.SourceID, pncp.Fetch); err != nil {
@@ -134,12 +139,14 @@ func serve(ctx context.Context) error {
 	}); err != nil {
 		return fmt.Errorf("schedule pncp: %w", err)
 	}
-	if _, err := sched.AddFunc(cfg.Collector.CartoesSchedule, func() {
-		if err := c.RunOnce(ctx, cartoes.SourceID, cartoes.Fetch); err != nil {
-			log.Error().Err(err).Str("source", cartoes.SourceID).Msg("scheduled run failed")
+	if cfg.Transparencia.APIKey != "" {
+		if _, err := sched.AddFunc(cfg.Collector.CartoesSchedule, func() {
+			if err := c.RunOnce(ctx, cartoes.SourceID, cartoes.Fetch); err != nil {
+				log.Error().Err(err).Str("source", cartoes.SourceID).Msg("scheduled run failed")
+			}
+		}); err != nil {
+			return fmt.Errorf("schedule cartoes: %w", err)
 		}
-	}); err != nil {
-		return fmt.Errorf("schedule cartoes: %w", err)
 	}
 
 	log.Info().
@@ -170,6 +177,15 @@ func resolveFetcher(sourceID string) (collector.Fetcher, error) {
 		return camara.Fetch, nil
 	default:
 		return nil, fmt.Errorf("unknown source %q (supported: ceis, cnep, pncp-contratos, cartoes-cpgf, camara-ceap)", sourceID)
+	}
+}
+
+func requiresTransparenciaAPIKey(sourceID string) bool {
+	switch sourceID {
+	case ceis.SourceID, cnep.SourceID, cartoes.SourceID:
+		return true
+	default:
+		return false
 	}
 }
 

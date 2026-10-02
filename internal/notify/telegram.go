@@ -55,13 +55,13 @@ func (t *TelegramChannel) Publish(ctx context.Context, event *store.ChangeEvent)
 	apiURL := fmt.Sprintf("%s/bot%s/sendMessage", t.baseURL, t.botToken)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, strings.NewReader(params.Encode()))
 	if err != nil {
-		return fmt.Errorf("telegram: build request: %w", err)
+		return telegramRequestError(err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := t.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("telegram: do request: %w", err)
+		return telegramRequestError(err)
 	}
 	defer resp.Body.Close()
 
@@ -78,6 +78,12 @@ func (t *TelegramChannel) Publish(ctx context.Context, event *store.ChangeEvent)
 	return nil
 }
 
+func telegramRequestError(error) error {
+	// net/url.Error includes the complete request URL, which contains the bot
+	// token. Keep transport failures useful without allowing credentials in logs.
+	return fmt.Errorf("telegram: request failed")
+}
+
 func (*TelegramChannel) formatText(e *store.ChangeEvent) string {
 	emoji := map[string]string{
 		"added":    "🆕",
@@ -86,9 +92,10 @@ func (*TelegramChannel) formatText(e *store.ChangeEvent) string {
 	}[e.ChangeType]
 
 	sev := ""
-	if e.Severity == "warn" {
+	switch e.Severity {
+	case "warn":
 		sev = " ⚠️"
-	} else if e.Severity == "alert" {
+	case "alert":
 		sev = " 🚨"
 	}
 

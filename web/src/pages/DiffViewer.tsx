@@ -2,15 +2,18 @@ import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, formatDate, formatNumber, shortHash } from "../lib/api";
 import { ArrowLeftRight, Minus, Plus, PenLine } from "lucide-react";
+import { useState } from "react";
 
 export function DiffViewer() {
   const { a, b } = useParams();
   const idA = Number(a);
   const idB = Number(b);
+  const [offset, setOffset] = useState(0);
+  const pageSize = 100;
 
   const diffQ = useQuery({
-    queryKey: ["diff", idA, idB],
-    queryFn: () => api.diff(idA, idB),
+    queryKey: ["diff", idA, idB, offset],
+    queryFn: () => api.diff(idA, idB, { limit: pageSize, offset }),
     enabled: !!idA && !!idB,
   });
 
@@ -128,6 +131,11 @@ export function DiffViewer() {
         hashField="hash_b"
         showBothHashes
       />
+      <div className="flex items-center justify-between text-sm">
+        <button className="text-accent disabled:text-ink-dim" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - pageSize))}>← página anterior</button>
+        <span className="text-ink-dim">itens {offset + 1}–{offset + Math.max(added.length, removed.length, changed.length)}; cada categoria usa a mesma página</span>
+        <button className="text-accent disabled:text-ink-dim" disabled={Math.max(added.length, removed.length, changed.length) < pageSize} onClick={() => setOffset(offset + pageSize)}>próxima página →</button>
+      </div>
     </div>
   );
 }
@@ -195,7 +203,7 @@ function DiffList({
             </tr>
           </thead>
           <tbody>
-            {items.slice(0, 200).map((it) => (
+            {items.map((it) => (
               <tr key={it.external_id} className="border-t border-ink/10">
                 <td className="px-4 py-2 font-mono">{it.external_id}</td>
                 <td className="px-4 py-2 font-mono text-[0.72rem] text-ink-dim">
@@ -218,11 +226,6 @@ function DiffList({
             ))}
           </tbody>
         </table>
-        {items.length > 200 && (
-          <div className="px-4 py-3 text-xs text-ink-dim border-t border-ink/10">
-            mostrando primeiros 200 de {items.length}
-          </div>
-        )}
       </div>
     </section>
   );

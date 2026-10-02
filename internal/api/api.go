@@ -2,6 +2,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 
@@ -22,21 +24,23 @@ import (
 
 // Server is the HTTP API server.
 type Server struct {
-	store   *store.Store
-	logger  zerolog.Logger
-	version string
-	baseURL string
-	started time.Time
+	store     *store.Store
+	logger    zerolog.Logger
+	version   string
+	baseURL   string
+	started   time.Time
+	expensive chan struct{}
 }
 
 // New creates a Server.
 func New(s *store.Store, logger zerolog.Logger, version, baseURL string) *Server {
 	return &Server{
-		store:   s,
-		logger:  logger,
-		version: version,
-		baseURL: baseURL,
-		started: time.Now(),
+		store:     s,
+		logger:    logger,
+		version:   version,
+		baseURL:   baseURL,
+		started:   time.Now(),
+		expensive: make(chan struct{}, 2),
 	}
 }
 
@@ -45,7 +49,6 @@ func New(s *store.Store, logger zerolog.Logger, version, baseURL string) *Server
 // Layout:
 //
 //   - /api/*  — JSON HTTP API (collectors, snapshots, events, proofs, diffs)
-//   - /api/metrics — Prometheus metrics
 //   - /api/health — liveness probe
 //   - /*      — Embedded React SPA (built from web/ via `make web`) with
 //     client-side routing fallback to index.html
@@ -59,9 +62,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/snapshots/{id}", s.handleGetSnapshot)
 	mux.HandleFunc("GET /api/snapshots/{id}/anchors", s.handleListSnapshotAnchors)
 	mux.HandleFunc("GET /api/snapshots/{id}/events", s.handleListSnapshotEvents)
-	mux.HandleFunc("GET /api/snapshots/{id}/diff/{other_id}", s.handleDiff)
+	mux.Handle("GET /api/snapshots/{id}/diff/{other_id}", s.expensiveRoute(http.HandlerFunc(s.handleDiff)))
 	mux.HandleFunc("GET /api/snapshots/{id}/events/{external_id}", s.handleGetEvent)
-	mux.HandleFunc("GET /api/snapshots/{id}/events/{external_id}/proof", s.handleProof)
+	mux.Handle("GET /api/snapshots/{id}/events/{external_id}/proof", s.expensiveRoute(http.HandlerFunc(s.handleProof)))
 
 	// Observatório M1 — drift detector queries
 	mux.HandleFunc("GET /api/diff-runs", s.handleListDiffRuns)
@@ -117,7 +120,11 @@ func (s *Server) Routes() http.Handler {
 	// R6 — CEAP (Câmara dos Deputados — cota parlamentar)
 	mux.HandleFunc("GET /api/gastos/ceap/stats", s.handleCEAPStats)
 
-	mux.Handle("GET /api/metrics", promhttp.Handler())
+	mux.HandleFunc("GET /api/gaps", s.handleListGaps)
+	mux.HandleFunc("POST /api/gaps", s.handleCreateGap)
+	// Keep the former public metrics path explicitly absent instead of letting
+	// the SPA fallback turn it into a successful HTML response.
+	mux.HandleFunc("GET /api/metrics", func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })
 
 	// Legacy unprefixed endpoints that external scripts might still depend on.
 	// These forward to the /api/* equivalents. Will be removed in v0.3.
@@ -127,6 +134,26 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /", serveSPA)
 
 	return logging(s.logger, mux)
+}
+
+// MetricsHandler is intentionally exposed separately so it can be bound only
+// to the private metrics listener.
+func MetricsHandler() http.Handler { return promhttp.Handler() }
+
+func (s *Server) expensiveRoute(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case s.expensive <- struct{}{}:
+			defer func() { <-s.expensive }()
+		default:
+			w.Header().Set("Retry-After", "5")
+			writeError(w, http.StatusTooManyRequests, errors.New("too many expensive requests"))
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+		defer cancel()
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 // handleListSnapshotEvents returns a paginated, lightweight list of events of a snapshot.
@@ -241,25 +268,9 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 				snapA.SourceID, snapB.SourceID))
 		return
 	}
-
-	eventsA, err := s.store.ListEventsBySnapshot(r.Context(), idA)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+	if snapA.LifecycleStatus != "complete" || snapB.LifecycleStatus != "complete" {
+		writeError(w, http.StatusConflict, errors.New("both snapshots must be complete before diffing"))
 		return
-	}
-	eventsB, err := s.store.ListEventsBySnapshot(r.Context(), idB)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-
-	mapA := make(map[string]store.Event, len(eventsA))
-	for _, e := range eventsA {
-		mapA[e.ExternalID] = e
-	}
-	mapB := make(map[string]store.Event, len(eventsB))
-	for _, e := range eventsB {
-		mapB[e.ExternalID] = e
 	}
 
 	type diffItem struct {
@@ -268,25 +279,18 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 		HashB      string `json:"hash_b,omitempty"`
 	}
 
-	var added, removed, changed []diffItem
-	for id, eb := range mapB {
-		ea, ok := mapA[id]
-		if !ok {
-			added = append(added, diffItem{ExternalID: id, HashB: store.HexHash(eb.ContentHash)})
-			continue
-		}
-		if !bytesEqual(ea.ContentHash, eb.ContentHash) {
-			changed = append(changed, diffItem{
-				ExternalID: id,
-				HashA:      store.HexHash(ea.ContentHash),
-				HashB:      store.HexHash(eb.ContentHash),
-			})
-		}
+	limit, offset := parsePage(r, 100, 200)
+	diff, err := s.store.CompareSnapshots(r.Context(), idA, idB, limit, offset)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
 	}
-	for id, ea := range mapA {
-		if _, ok := mapB[id]; !ok {
-			removed = append(removed, diffItem{ExternalID: id, HashA: store.HexHash(ea.ContentHash)})
+	toItems := func(items []store.SnapshotDiffItem) []diffItem {
+		out := make([]diffItem, len(items))
+		for i, item := range items {
+			out[i] = diffItem{ExternalID: item.ExternalID, HashA: store.HexHash(item.HashA), HashB: store.HexHash(item.HashB)}
 		}
+		return out
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -302,26 +306,11 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 			"record_count": snapB.RecordCount,
 		},
 		"summary": map[string]int{
-			"added":   len(added),
-			"removed": len(removed),
-			"changed": len(changed),
+			"added": diff.AddedTotal, "removed": diff.RemovedTotal, "changed": diff.ChangedTotal,
 		},
-		"added":   added,
-		"removed": removed,
-		"changed": changed,
+		"page":  map[string]int{"limit": limit, "offset": offset},
+		"added": toItems(diff.Added), "removed": toItems(diff.Removed), "changed": toItems(diff.Changed),
 	})
-}
-
-func bytesEqual(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 // (handleIndex and the server-rendered HTML templates were removed in v0.1
@@ -449,36 +438,60 @@ func (s *Server) handleProof(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, errors.New("snapshot has no merkle root yet"))
 		return
 	}
-
-	// Locate the target event and also pull all events to rebuild the tree
-	// (MVP: we recompute the tree on-demand; v0.2 will cache the intermediate nodes).
-	events, err := s.store.ListEventsBySnapshot(r.Context(), id)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+	if snap.LifecycleStatus != "complete" {
+		writeError(w, http.StatusConflict, errors.New("snapshot is not complete"))
 		return
 	}
-	var targetIdx = -1
-	for i, ev := range events {
-		if ev.ExternalID == externalID {
-			targetIdx = i
-			break
+	const maxProofEvents = 200000
+	const maxProofPayloadBytes = 2 << 20
+	if snap.RecordCount <= 0 || snap.RecordCount > maxProofEvents {
+		writeError(w, http.StatusRequestEntityTooLarge, errors.New("snapshot exceeds proof generation limits"))
+		return
+	}
+	target, err := s.store.GetSnapshotProofTarget(r.Context(), id, externalID, maxProofPayloadBytes)
+	if err != nil {
+		if errors.Is(err, store.ErrProofPayloadTooLarge) {
+			writeError(w, http.StatusRequestEntityTooLarge, err)
+		} else if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, fmt.Errorf("event %q not found in snapshot %d", externalID, id))
+		} else {
+			writeError(w, http.StatusInternalServerError, err)
 		}
+		return
 	}
-	if targetIdx == -1 {
-		writeError(w, http.StatusNotFound,
-			fmt.Errorf("event %q not found in snapshot %d", externalID, id))
+	leaves, err := s.store.ListSnapshotHashLeaves(r.Context(), id, maxProofEvents)
+	if err != nil {
+		writeError(w, http.StatusRequestEntityTooLarge, err)
+		return
+	}
+	if len(leaves) != snap.RecordCount {
+		writeError(w, http.StatusConflict, errors.New("snapshot event count is incomplete"))
+		return
+	}
+	targetIdx, err := s.store.SnapshotProofIndex(r.Context(), id, target.ID)
+	if err != nil || targetIdx < 0 || targetIdx >= len(leaves) {
+		writeError(w, http.StatusConflict, errors.New("proof target is outside snapshot leaves"))
 		return
 	}
 
-	leaves := make([][merkle.HashSize]byte, len(events))
-	for i, ev := range events {
+	hashes := make([][merkle.HashSize]byte, len(leaves))
+	for i, leaf := range leaves {
+		if len(leaf.ContentHash) != merkle.HashSize {
+			writeError(w, http.StatusConflict, errors.New("snapshot contains an invalid content hash"))
+			return
+		}
 		var h [merkle.HashSize]byte
-		copy(h[:], ev.ContentHash)
-		leaves[i] = h
+		copy(h[:], leaf.ContentHash)
+		hashes[i] = h
 	}
-	tree, err := merkle.Build(leaves)
+	tree, err := merkle.Build(hashes)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	computedRoot := tree.Root()
+	if !bytes.Equal(computedRoot[:], snap.MerkleRoot) {
+		writeError(w, http.StatusConflict, errors.New("recomputed merkle root does not match snapshot"))
 		return
 	}
 	proofSteps, err := tree.Proof(targetIdx)
@@ -499,9 +512,9 @@ func (s *Server) handleProof(w http.ResponseWriter, r *http.Request) {
 		SnapshotID:          snap.ID,
 		SnapshotCollectedAt: snap.CollectedAt,
 		Event: ProofEvent{
-			ExternalID:    events[targetIdx].ExternalID,
-			ContentHash:   store.HexHash(events[targetIdx].ContentHash),
-			CanonicalJSON: json.RawMessage(events[targetIdx].CanonicalJSON),
+			ExternalID:    target.ExternalID,
+			ContentHash:   store.HexHash(target.ContentHash),
+			CanonicalJSON: json.RawMessage(target.CanonicalJSON),
 		},
 		Merkle: ProofMerkle{
 			Root:  store.HexHash(snap.MerkleRoot),
@@ -545,6 +558,7 @@ type snapshotView struct {
 	MerkleComputedAt string `json:"merkle_computed_at,omitempty"`
 	CollectorVersion string `json:"collector_version"`
 	Notes            string `json:"notes,omitempty"`
+	LifecycleStatus  string `json:"lifecycle_status"`
 }
 
 func snapshotDTO(s *store.Snapshot) snapshotView {
@@ -557,6 +571,7 @@ func snapshotDTO(s *store.Snapshot) snapshotView {
 		BytesSize:        s.BytesSize,
 		CollectorVersion: s.CollectorVersion,
 		Notes:            s.Notes,
+		LifecycleStatus:  s.LifecycleStatus,
 	}
 	if len(s.MerkleRoot) > 0 {
 		view.MerkleRoot = store.HexHash(s.MerkleRoot)
@@ -627,6 +642,21 @@ func parseID(s string) (int64, error) {
 		return 0, fmt.Errorf("invalid id %q", s)
 	}
 	return n, nil
+}
+
+func parsePage(r *http.Request, defaultLimit, maxLimit int) (limit, offset int) {
+	limit = defaultLimit
+	if value := r.URL.Query().Get("limit"); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil && parsed > 0 && parsed <= maxLimit {
+			limit = parsed
+		}
+	}
+	if value := r.URL.Query().Get("offset"); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+	return limit, offset
 }
 
 // logging is a small middleware that logs each request at debug level and

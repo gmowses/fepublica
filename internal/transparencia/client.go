@@ -121,8 +121,8 @@ func (c *Client) Get(ctx context.Context, path string, query url.Values, out any
 		return fmt.Errorf("transparencia: read body: %w", err)
 	}
 
-	switch {
-	case resp.StatusCode == http.StatusOK:
+	switch resp.StatusCode {
+	case http.StatusOK:
 		if len(body) == 0 || out == nil {
 			return nil
 		}
@@ -131,11 +131,11 @@ func (c *Client) Get(ctx context.Context, path string, query url.Values, out any
 		}
 		return nil
 
-	case resp.StatusCode == http.StatusUnauthorized, resp.StatusCode == http.StatusForbidden:
+	case http.StatusUnauthorized, http.StatusForbidden:
 		return fmt.Errorf("%w: status %d, body: %s",
 			ErrUnauthorized, resp.StatusCode, truncate(string(body), 200))
 
-	case resp.StatusCode == http.StatusTooManyRequests:
+	case http.StatusTooManyRequests:
 		return fmt.Errorf("%w: status %d", ErrRateLimited, resp.StatusCode)
 
 	default:

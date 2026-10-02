@@ -95,7 +95,15 @@ type LogConfig struct {
 // Load reads configuration from environment variables and validates required fields.
 // Missing non-required fields are filled with defaults.
 func Load() (*Config, error) {
-	cfg := &Config{
+	cfg := load()
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+func load() *Config {
+	return &Config{
 		Postgres: PostgresConfig{
 			Host:     getenv("POSTGRES_HOST", "localhost"),
 			Port:     getenvInt("POSTGRES_PORT", 5432),
@@ -147,45 +155,62 @@ func Load() (*Config, error) {
 		},
 	}
 
-	if err := cfg.Validate(); err != nil {
-		return nil, err
-	}
-	return cfg, nil
 }
 
 // Validate returns an error describing the first missing required field.
 func (c *Config) Validate() error {
 	var missing []string
-	if c.Postgres.Password == "" {
-		missing = append(missing, "POSTGRES_PASSWORD")
-	}
-	if c.Transparencia.APIKey == "" {
-		missing = append(missing, "TRANSPARENCIA_API_KEY")
-	}
 	if len(c.OTS.Calendars) == 0 {
 		missing = append(missing, "OTS_CALENDARS")
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("missing required config: %s", strings.Join(missing, ", "))
 	}
+	return c.ValidatePostgres()
+}
+
+// LoadPartial loads the database configuration required by API-only components.
+func LoadPartial() (*Config, error) {
+	cfg := load()
+	if err := cfg.ValidatePostgres(); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// ValidatePostgres validates the database settings needed by API-only components.
+func (c *Config) ValidatePostgres() error {
+	if strings.TrimSpace(c.Postgres.Password) == "" {
+		return errors.New("missing required config: POSTGRES_PASSWORD")
+	}
+	if isPlaceholder(c.Postgres.Password) {
+		return errors.New("POSTGRES_PASSWORD must not use a placeholder value")
+	}
+	if !isLocalPostgresHost(c.Postgres.Host) {
+		switch strings.ToLower(strings.TrimSpace(c.Postgres.SSLMode)) {
+		case "require", "verify-ca", "verify-full":
+		default:
+			return errors.New("POSTGRES_SSLMODE must require TLS for a remote POSTGRES_HOST")
+		}
+	}
 	return nil
 }
 
-// LoadPartial loads config without enforcing full validation. Useful for components
-// that only need a subset (e.g. the api binary doesn't need TRANSPARENCIA_API_KEY).
-func LoadPartial() (*Config, error) {
-	cfg, err := Load()
-	if err == nil {
-		return cfg, nil
+func isPlaceholder(value string) bool {
+	v := strings.ToLower(strings.TrimSpace(value))
+	return v == "change_me_in_real_deployments" || v == "change_me" || v == "password" || v == "changeme" || strings.Contains(v, "replace_me")
+}
+
+func isLocalPostgresHost(host string) bool {
+	if strings.HasPrefix(strings.TrimSpace(host), "/") {
+		return true
 	}
-	// If only transparencia key is missing, tolerate it for api-only mode.
-	var missingErr error = err
-	if strings.Contains(err.Error(), "TRANSPARENCIA_API_KEY") &&
-		!strings.Contains(err.Error(), "POSTGRES_PASSWORD") &&
-		!strings.Contains(err.Error(), "OTS_CALENDARS") {
-		return &Config{}, missingErr // caller can inspect err
+	switch strings.ToLower(strings.TrimSpace(host)) {
+	case "localhost", "127.0.0.1", "::1", "postgres":
+		return true
+	default:
+		return false
 	}
-	return nil, err
 }
 
 func getenv(key, def string) string {

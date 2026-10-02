@@ -73,6 +73,7 @@ type Snapshot struct {
 	MerkleComputedAt *time.Time
 	CollectorVersion string
 	Notes            string
+	LifecycleStatus  string
 }
 
 // Event is a single record captured in a snapshot.

@@ -110,6 +110,18 @@ func (c *Collector) RunOnce(ctx context.Context, sourceID string, fetcher Fetche
 	if err != nil {
 		return fmt.Errorf("collector: create snapshot: %w", err)
 	}
+	// A failed batch must remain visible as failed evidence, never as an
+	// anchorable snapshot with an optimistic final count. WithoutCancel lets us
+	// persist that state even when the collection context was cancelled.
+	defer func() {
+		if err == nil {
+			return
+		}
+		if failErr := c.store.FailSnapshot(context.WithoutCancel(ctx), snapshotID); failErr != nil {
+			log.Error().Err(failErr).Int64("snapshot_id", snapshotID).
+				Msg("collector: could not mark failed snapshot")
+		}
+	}()
 
 	// Attach snapshot_id and insert all events.
 	for i := range events {
@@ -118,6 +130,9 @@ func (c *Collector) RunOnce(ctx context.Context, sourceID string, fetcher Fetche
 	inserted, err := c.store.InsertEventsBatch(ctx, events)
 	if err != nil {
 		return fmt.Errorf("collector: insert events (%d of %d inserted): %w", inserted, len(events), err)
+	}
+	if err := c.store.CompleteSnapshot(ctx, snapshotID); err != nil {
+		return fmt.Errorf("collector: complete snapshot %d: %w", snapshotID, err)
 	}
 
 	metrics.CollectorRecordsTotal.WithLabelValues(sourceID).Add(float64(inserted))
